@@ -595,7 +595,7 @@ def handle_all_callbacks(call):
                 parse_mode='Markdown',
             )
 
-    elif data.startswith('admin_'):
+        elif data.startswith('admin_'):
         if call.from_user.id != ADMIN_ID:
             bot.answer_callback_query(call.id, '⚠️ You are not authorized!', show_alert=True)
             return
@@ -659,23 +659,23 @@ def handle_all_callbacks(call):
                     reply_markup=markup
                 )
 
-            elif data == 'admin_broadcast':
-        bot.answer_callback_query(call.id)
-        msg = safe_send_message(
-            call.message.chat.id,
-            '📢 Please send the broadcast message:'
-        )
-        bot.register_next_step_handler(msg, process_broadcast)
+        elif data == 'admin_broadcast':
+            bot.answer_callback_query(call.id)
+            msg = safe_send_message(
+                call.message.chat.id,
+                '📢 Please send the broadcast message:'
+            )
+            bot.register_next_step_handler(msg, process_broadcast)
 
-    elif data == 'admin_set_chan':
-        bot.answer_callback_query(call.id)
-        msg = safe_send_message(
-            call.message.chat.id,
-            '🔗 Naya Official Channel Link bhejo:',
-            parse_mode='Markdown'
-        )
-        bot.register_next_step_handler(msg, process_set_chan)
-
+        elif data == 'admin_set_chan':
+            bot.answer_callback_query(call.id)
+            msg = safe_send_message(
+                call.message.chat.id,
+                '🔗 Naya Official Channel Link bhejo:',
+                parse_mode='Markdown'
+            )
+            bot.register_next_step_handler(msg, process_set_chan)
+            
 def process_admin_block(message):
     try:
         target_id = int(message.text.strip())
