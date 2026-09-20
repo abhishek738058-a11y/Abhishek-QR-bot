@@ -559,48 +559,45 @@ def handle_all_callbacks(call):
                     ' has been successfully paid to your UPI!',
                     parse_mode='Markdown',
                 )
-        elif data.startswith('w_reject_'):
-            req_id = int(data.split('_')[2])
+            elif data.startswith('w_reject_'):
+        req_id = int(data.split('_')[2])
+        cursor.execute(
+            'SELECT user_id, amount FROM withdrawals WHERE id = ?', (req_id,)
+        )
+        row = cursor.fetchone()
+        if row:
+            u_id, amt = row['user_id'], row['amount']
             cursor.execute(
-                'SELECT user_id, amount FROM withdrawals WHERE id = ?', (req_id,)
+                'UPDATE withdrawals SET status = ? WHERE id = ?', ('Rejected', req_id)
             )
-            row = cursor.fetchone()
-            if row:
-                u_id, amt = row['user_id'], row['amount']
-                cursor.execute(
-                    "UPDATE withdrawals SET status = 'Rejected' WHERE id = ?", (req_id,)
-                )
-                cursor.execute(
-                    'UPDATE users SET balance = balance + ? WHERE user_id = ?',
-                    (amt, u_id),
-                )
-                conn.commit()
-                                try:
-                    bot.edit_message_text(
-                        f'❌ *WITHDRAWAL REJECTED!*\nReq #{req_id}\n ₹{amt:.2f} (Refunded)',
-                        chat_id=call.message.chat.id,
-                        message_id=call.message.message_id,
-                        parse_mode='Markdown',
-                    )
-                except Exception:
-                    pass
-                    bot.answer_callback_query(call.id, '❌ Rejected & Refunded!')
-                
-                safe_send_message(
-                    u_id,
-                    f'❌ *Withdrawal Rejected!*\nYour request #{req_id} of ₹{amt:.2f}'
-                    ' was rejected and refunded back to your balance.',
+            cursor.execute(
+                'UPDATE users SET balance = balance + ? WHERE user_id = ?', (amt, u_id)
+            )
+            conn.commit()
+            try:
+                bot.edit_message_text(
+                    f'❌ *WITHDRAWAL REJECTED!*\nReq #{req_id} of ₹{amt:.2f} (Refunded)',
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
                     parse_mode='Markdown',
                 )
-                
-                
-        elif data.startswith('admin_'):
-            if call.from_user.id != ADMIN_ID:
-                bot.answer_callback_query(
-                    call.id, '⚠️ You are not authorized!', show_alert=True
-                )
-                conn.close()
-                return
+            except Exception:
+                pass
+
+            bot.answer_callback_query(call.id, '❌ Rejected & Refunded!')
+            
+            safe_send_message(
+                u_id,
+                f'❌ *Withdrawal Rejected!*\nYour request #{req_id} of ₹{amt:.2f}'
+                ' was rejected and refunded back to your balance.',
+                parse_mode='Markdown',
+            )
+
+    elif data.startswith('admin_'):
+        if call.from_user.id != ADMIN_ID:
+            bot.answer_callback_query(call.id, '⚠️ You are not authorized!', show_alert=True)
+            return
+    
             if data == 'admin_stats':
                 cursor.execute('SELECT COUNT(*) FROM users')
                 tot_users = cursor.fetchone()[0]
