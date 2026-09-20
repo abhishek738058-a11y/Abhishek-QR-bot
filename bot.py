@@ -412,4 +412,5 @@ if __name__ == '__main__':
   print('Flask server started...')
 
   print('Telegram Bot is running successfully...')
+  bot.remove_webhook()
   bot.infinity_polling()
