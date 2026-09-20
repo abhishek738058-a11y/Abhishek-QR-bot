@@ -525,40 +525,42 @@ def handle_all_callbacks(call):
     data = call.data
     conn = get_db_connection()
     cursor = conn.cursor()
-    try:
-        if data.startswith('w_approve_'):
-            req_id = int(data.split('_')[2])
+    
+    if data.startswith('w_approve_'):
+        req_id = int(data.split('_')[2])
+        cursor.execute(
+            'SELECT user_id, amount FROM withdrawals WHERE id = ?', (req_id,)
+        )
+        row = cursor.fetchone()
+        if row:
+            u_id, amt = row['user_id'], row['amount']
             cursor.execute(
-                'SELECT user_id, amount FROM withdrawals WHERE id = ?', (req_id,)
+                'UPDATE withdrawals SET status = ? WHERE id = ?', ('Approved', req_id)
             )
-            row = cursor.fetchone()
-            if row:
-                u_id, amt = row['user_id'], row['amount']
-                cursor.execute(
-                    "UPDATE withdrawals SET status = 'Approved' WHERE id = ?", (req_id,)
-                )
-                cursor.execute(
-                    'UPDATE users SET total_withdrawn = total_withdrawn + ? WHERE'
-                    ' user_id = ?',
-                    (amt, u_id),
-                )
-                conn.commit()
-                try:
-                    bot.edit_message_text(
-                        f'✅ *WITHDRAWAL APPROVED!*\nReq #{req_id}\n ₹{amt:.2f} Paid!',
-                        chat_id=call.message.chat.id,
-                        message_id=call.message.message_id,
-                        parse_mode='Markdown',
-                    )
-                except Exception:
-                    pass
-                bot.answer_callback_query(call.id, '✅ Approved!')
-                safe_send_message(
-                    u_id,
-                    f'🎉 *Withdrawal Approved!*\nYour request #{req_id} of ₹{amt:.2f}'
-                    ' has been successfully paid to your UPI!',
+            cursor.execute(
+                'UPDATE users SET balance = balance + ? WHERE user_id = ?', (amt, u_id)
+            )
+            conn.commit()
+            try:
+                bot.edit_message_text(
+                    f'🎉 *Withdrawal Approved!*\nReq #{req_id} of ₹{amt:.2f}\n'
+                    'has been successfully processed and approved.',
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
                     parse_mode='Markdown',
                 )
+            except Exception:
+                pass
+
+            bot.answer_callback_query(call.id, '✅ Approved!')
+            
+            safe_send_message(
+                u_id,
+                f'🎉 *Withdrawal Approved!*\nYour request #{req_id} of ₹{amt:.2f}'
+                ' has been successfully processed and approved.',
+                parse_mode='Markdown',
+            )
+
     elif data.startswith('w_reject_'):
         req_id = int(data.split('_')[2])
         cursor.execute(
@@ -597,106 +599,82 @@ def handle_all_callbacks(call):
         if call.from_user.id != ADMIN_ID:
             bot.answer_callback_query(call.id, '⚠️ You are not authorized!', show_alert=True)
             return
-            
-                
-                cursor.execute('SELECT COUNT(*) FROM users')
-                tot_users = cursor.fetchone()[0]
-                cursor.execute(
-                    'SELECT COUNT(*) FROM users WHERE notifications_enabled = 1'
-                )
-                notif_users = cursor.fetchone()[0]
-                cursor.execute(
-                    "SELECT COUNT(*), SUM(amount) FROM withdrawals WHERE status ="
-                    " 'Pending'"
-                )
-                p_row = cursor.fetchone()
-                p_reqs, p_amt = p_row[0], p_row[1] or 0.0
-                cursor.execute(
-                    'SELECT SUM(total_withdrawn), SUM(total_rewards) FROM users'
-                )
-                tot_row = cursor.fetchone()
-                tot_w, tot_r = tot_row[0] or 0.0, tot_row[1] or 0.0
-                stats_msg = f"""📊 *ABHISHEK QR BOT STATISTICS* 📊
-━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        if data == 'admin_stats':
+            cursor.execute('SELECT COUNT(*) FROM users')
+            tot_users = cursor.fetchone()[0]
+            cursor.execute(
+                'SELECT COUNT(*) FROM users WHERE notifications = 1'
+            )
+            notif_users = cursor.fetchone()[0]
+            cursor.execute(
+                'SELECT COUNT(*), SUM(amount) FROM withdrawals WHERE status = "Pending"'
+            )
+            p_row = cursor.fetchone()
+            p_reqs, p_amt = p_row[0], p_row[1] or 0.0
+            cursor.execute(
+                'SELECT SUM(total_withdrawn), SUM(total_earned) FROM users'
+            )
+            tot_row = cursor.fetchone()
+            tot_w, tot_r = tot_row[0] or 0.0, tot_row[1] or 0.0
+            stats_msg = f"""📊 *ABHISHEK QR BOT STATS*
+
 👥 *Total Registered Users:* **{tot_users}**
 🔔 *Notification Enabled:* **{notif_users}**
 ⏳ *Pending Withdrawals:* **{p_reqs}** (₹{p_amt:.2f})
-💸 *Total Payout Delivered:* **₹{tot_w:.2f}**
+💰 *Total Payout Delivered:* **₹{tot_w:.2f}**
 🎁 *Total User Earnings:* **₹{tot_r:.2f}**"""
-                bot.answer_callback_query(call.id)
-                safe_send_message(
-                    call.message.chat.id, stats_msg, parse_mode='Markdown'
-                )
-            elif data == 'admin_pending_w':
-                cursor.execute(
-                    "SELECT id, user_id, amount, upi_id FROM withdrawals WHERE status ="
-                    " 'Pending' LIMIT 10"
-                )
-                pending = cursor.fetchall()
-                if not pending:
-                    bot.answer_callback_query(
-                        call.id, '✅ Koi pending withdrawal nahi hai!', show_alert=True
-                    )
-                    conn.close()
-                    return
-                bot.answer_callback_query(call.id)
-                for req in pending:
-                    req_id, u_id, amt, upi = req
-                    btn_markup = InlineKeyboardMarkup()
-                    btn_markup.add(
-                        InlineKeyboardButton(
-                            '✅ Approve', callback_data=f'w_approve_{req_id}'
-                        ),
-                        InlineKeyboardButton(
-                            '❌ Reject', callback_data=f'w_reject_{req_id}'
-                        ),
-                    )
-                    safe_send_message(
-                        call.message.chat.id,
-                        f'🆔 *Req #{req_id}*\n👤 User: `{u_id}`\n💵 Amt:'
-                        f' **₹{amt:.2f}**\n💳 UPI: `{upi}`',
-                        reply_markup=btn_markup,
-                        parse_mode='Markdown',
-                    )
-            elif data == 'admin_toggle_block':
-                msg = bot.send_message(
-                    call.message.chat.id,
-                    '🚫 Block/Unblock karne ke liye User ID bhejein:\n(Example: `8411871478`)',
-                    parse_mode='Markdown',
-                )
-                bot.register_next_step_handler(msg, process_admin_block)
-            elif data == 'admin_add_task':
-                msg = bot.send_message(
-                    call.message.chat.id,
-                    '🎯 Task Approve karne ke liye detail bhejein:\nFormat: `USER_ID TASK_NUM AMOUNT`\nExample: `8411871478 1 10`',
-                    parse_mode='Markdown',
-                )
-                bot.register_next_step_handler(msg, process_admin_add_task)
-            elif data == 'admin_qr_broadcast':
-                msg = bot.send_message(
-                    call.message.chat.id,
-                    '⚡ *LIVE QR TASK ALERT BROADCAST*\n\nNaye QR task ki detail ya Message likhein:',
-                    parse_mode='Markdown',
-                )
-                bot.register_next_step_handler(msg, process_admin_qr_broadcast)
-            elif data == 'admin_broadcast':
-                msg = bot.send_message(
-                    call.message.chat.id,
-                    '📢 *GENERAL BROADCAST*\n\nSabhi users ko bhejne ke liye Message likhein:',
-                )
-                bot.register_next_step_handler(msg, process_admin_broadcast)
-            elif data == 'admin_set_chan':
-                msg = bot.send_message(
-                    call.message.chat.id,
-                    '🔗 Naya Official Channel Link bhejein:\nExample: `https://t.me/YourChannel`',
-                    parse_mode='Markdown',
-                )
-                bot.register_next_step_handler(msg, process_admin_set_channel)
-    except Exception as e:
-        print(f'Error in callback: {e}')
-    finally:
-        conn.close()
+            bot.answer_callback_query(call.id)
+            safe_send_message(
+                call.message.chat.id,
+                stats_msg,
+                parse_mode='Markdown',
+            )
 
+        elif data == 'admin_pending_w':
+            cursor.execute(
+                'SELECT id, user_id, amount, upi_id FROM withdrawals WHERE status = "Pending"'
+            )
+            pending_reqs = cursor.fetchall()
+            if not pending_reqs:
+                bot.answer_callback_query(call.id, '📭 No pending withdrawals!')
+                return
+            
+            bot.answer_callback_query(call.id)
+            for req in pending_reqs:
+                r_id, u_id, amt, upi = req['id'], req['user_id'], req['amount'], req['upi_id']
+                markup = types.InlineKeyboardMarkup(row_width=2)
+                markup.add(
+                    types.InlineKeyboardButton('✅ Approve', callback_data=f'w_approve_{r_id}'),
+                    types.InlineKeyboardButton('❌ Reject', callback_data=f'w_reject_{r_id}')
+                )
+                safe_send_message(
+                    call.message.chat.id,
+                    f'⏳ *Pending Withdrawal Request*\n\n'
+                    f'🆔 Req ID: `#{r_id}`\n'
+                    f'👤 User ID: `{u_id}`\n'
+                    f'💰 Amount: ₹{amt:.2f}\n'
+                    f'🏦 UPI ID: `{upi}`',
+                    parse_mode='Markdown',
+                    reply_markup=markup
+                )
+
+            elif data == 'admin_broadcast':
+        bot.answer_callback_query(call.id)
+        msg = safe_send_message(
+            call.message.chat.id,
+            '📢 Please send the broadcast message:'
+        )
+        bot.register_next_step_handler(msg, process_broadcast)
+
+    elif data == 'admin_set_chan':
+        bot.answer_callback_query(call.id)
+        msg = safe_send_message(
+            call.message.chat.id,
+            '🔗 Naya Official Channel Link bhejo:',
+            parse_mode='Markdown'
+        )
+        bot.register_next_step_handler(msg, process_set_chan)
 
 def process_admin_block(message):
     try:
