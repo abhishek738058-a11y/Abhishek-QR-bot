@@ -5,14 +5,12 @@ from flask import Flask
 import telebot
 from telebot import types
 
-# ===== AAPKA TOKEN, ADMIN ID, AUR TELEGRAM CHANNEL LINK SET HAI =====
 API_TOKEN = '8513419896:AAFMs-OxnZE7OjWjPK8gt34cMU9Z5-w1_2E'
 ADMIN_ID = 8411871478
 CHANNEL_USERNAME = 'https://t.me/+757WqqqLLoo4Yjhl'
 
 bot = telebot.TeleBot(API_TOKEN)
 
-# --- FLASK SERVER (UptimeRobot ke liye taaki bot 24/7 active rahe) ---
 app = Flask('')
 
 
@@ -26,14 +24,12 @@ def run_flask():
   app.run(host='0.0.0.0', port=port)
 
 
-# Database Connection
 def get_db_connection():
   conn = sqlite3.connect('bot_database.db')
   conn.row_factory = sqlite3.Row
   return conn
 
 
-# Initialize Database Tables
 def init_db():
   conn = get_db_connection()
   cursor = conn.cursor()
@@ -63,7 +59,6 @@ def init_db():
 init_db()
 
 
-# Safe Message Sender Helper
 def safe_send_message(chat_id, text, parse_mode='Markdown', reply_markup=None):
   try:
     return bot.send_message(
@@ -74,7 +69,6 @@ def safe_send_message(chat_id, text, parse_mode='Markdown', reply_markup=None):
     return None
 
 
-# /start Command Handler
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
   try:
@@ -82,7 +76,6 @@ def send_welcome(message):
     first_name = message.from_user.first_name or 'User'
     username = message.from_user.username or 'None'
 
-    # Database mein user save ya update karein
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
@@ -97,7 +90,6 @@ def send_welcome(message):
     conn.commit()
     conn.close()
 
-    # Inline Keyboards
     markup = types.InlineKeyboardMarkup(row_width=2)
     markup.add(
         types.InlineKeyboardButton(
@@ -108,7 +100,6 @@ def send_welcome(message):
         ),
     )
 
-    # Channel link handling (Direct invitation/channel link support)
     if CHANNEL_USERNAME.startswith('http'):
       markup.add(
           types.InlineKeyboardButton('📢 Official Channel', url=CHANNEL_USERNAME)
@@ -138,7 +129,6 @@ def send_welcome(message):
     print(f'Error in start: {e}')
 
 
-# All Callback Queries Handler
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callbacks(call):
   try:
