@@ -5,7 +5,7 @@ from flask import Flask
 import telebot
 from telebot import types
 
-API_TOKEN = '8513419896:AAE_rVsEjmnOQOuDDP11h4_sWA4IYgoNB1Q'
+API_TOKEN = '8513419896:AAFYf68xFnJXjzmfcqA6vKMg7VfsxvRIEbU'
 ADMIN_ID = 8411871478
 CHANNEL_USERNAME = 'https://t.me/+757WqqqLLoo4Yjhl'
 
@@ -63,7 +63,7 @@ def init_db():
         )
     ''')
   
-  # Purana test/fake data ya 50 balance ko clean karne ke liye:
+  # Purane test/fake data ya 50 balance ko clean karne ke liye:
   cursor.execute("UPDATE users SET balance = 0.0, total_earned = 0.0 WHERE balance = 50.0")
   conn.commit()
   conn.close()
