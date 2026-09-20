@@ -5,7 +5,7 @@ from flask import Flask
 import telebot
 from telebot import types
 
-API_TOKEN = '8513419896:AAF8x7I1fi9NNsLA1t0cmbaVczbgaYdKUDw'
+API_TOKEN = '8513419896:AAE_rVsEjmnOQOuDDP11h4_sWA4IYgoNB1Q'
 ADMIN_ID = 8411871478
 CHANNEL_USERNAME = 'https://t.me/+757WqqqLLoo4Yjhl'
 
@@ -171,7 +171,6 @@ def handle_reply_buttons(message):
         bal = user['balance']
         earned = user['total_earned']
         withdrawn = user['total_withdrawn']
-        notif = 'ON' if user['notifications'] == 1 else 'OFF'
         msg_text = (
             f'📊 *YOUR ACCOUNT STATS*\n\n👤 Name: {user["first_name"]}\n🔗'
             f' Username: @{user["username"]}\n🆔 User ID:'
