@@ -38,9 +38,10 @@ def init_db():
             user_id INTEGER PRIMARY KEY,
             first_name TEXT,
             username TEXT,
-            balance REAL DEFAULT 0.0,
-            total_earned REAL DEFAULT 0.0,
-            total_withdrawn REAL DEFAULT 0.0
+            balance REAL DEFAULT 50.0,
+            total_earned REAL DEFAULT 50.0,
+            total_withdrawn REAL DEFAULT 0.0,
+            notifications INTEGER DEFAULT 1
         )
     ''')
   cursor.execute('''
@@ -52,11 +53,41 @@ def init_db():
             status TEXT DEFAULT 'Pending'
         )
     ''')
+  cursor.execute('''
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            task_name TEXT,
+            status TEXT DEFAULT 'Completed'
+        )
+    ''')
   conn.commit()
   conn.close()
 
 
 init_db()
+
+
+def get_main_keyboard():
+  markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+  markup.add(
+      types.KeyboardButton('🎯 GET QR'), types.KeyboardButton('💰 My Balance')
+  )
+  markup.add(
+      types.KeyboardButton('👤 My Account'),
+      types.KeyboardButton('💸 Withdraw Money'),
+  )
+  markup.add(
+      types.KeyboardButton('📜 Withdrawal History'),
+      types.KeyboardButton('💎 Invite & Earn'),
+  )
+  markup.add(
+      types.KeyboardButton('📋 Task History'),
+      types.KeyboardButton('🔔 Toggle Notification'),
+  )
+  markup.add(types.KeyboardButton('🛠 Support'))
+  markup.add(types.KeyboardButton('👑 Admin Panel'))
+  return markup
 
 
 def safe_send_message(chat_id, text, parse_mode='Markdown', reply_markup=None):
@@ -79,8 +110,8 @@ def send_welcome(message):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT OR IGNORE INTO users (user_id, first_name, username, balance)'
-        ' VALUES (?, ?, ?, 50.0)',
+        'INSERT OR IGNORE INTO users (user_id, first_name, username, balance,'
+        ' total_earned) VALUES (?, ?, ?, 50.0, 50.0)',
         (user_id, first_name, username),
     )
     cursor.execute(
@@ -90,92 +121,165 @@ def send_welcome(message):
     conn.commit()
     conn.close()
 
-    markup = types.InlineKeyboardMarkup(row_width=2)
-    markup.add(
-        types.InlineKeyboardButton(
-            '💰 My Balance & Stats', callback_data='my_balance'
-        ),
-        types.InlineKeyboardButton(
-            '💸 Request Withdrawal', callback_data='request_withdrawal'
-        ),
-    )
-
-    if CHANNEL_USERNAME.startswith('http'):
-      markup.add(
-          types.InlineKeyboardButton('📢 Official Channel', url=CHANNEL_USERNAME)
-      )
-    else:
-      clean_chan = CHANNEL_USERNAME.replace('@', '')
-      markup.add(
-          types.InlineKeyboardButton(
-              '📢 Official Channel', url=f'https://t.me/{clean_chan}'
-          )
-      )
-
-    if user_id == ADMIN_ID:
-      markup.add(
-          types.InlineKeyboardButton(
-              '🔐 Admin Panel', callback_data='admin_panel'
-          )
-      )
-
     safe_send_message(
         message.chat.id,
         f'👋 *Welcome, {first_name}!*\n\nAap niche diye gaye options se apni'
         ' earnings aur withdrawals manage kar sakte hain.',
-        reply_markup=markup,
+        reply_markup=get_main_keyboard(),
     )
   except Exception as e:
     print(f'Error in start: {e}')
 
 
-@bot.callback_query_handler(func=lambda call: True)
-def handle_callbacks(call):
+@bot.message_handler(
+    func=lambda message: message.text
+    in [
+        '🎯 GET QR',
+        '💰 My Balance',
+        '👤 My Account',
+        '💸 Withdraw Money',
+        '📜 Withdrawal History',
+        '💎 Invite & Earn',
+        '📋 Task History',
+        '🔔 Toggle Notification',
+        '🛠 Support',
+        '👑 Admin Panel',
+    ]
+)
+def handle_reply_buttons(message):
   try:
+    text = message.text
+    user_id = message.from_user.id
     conn = get_db_connection()
     cursor = conn.cursor()
-    data = call.data
-    user_id = call.from_user.id
 
-    if data == 'my_balance':
+    if text == '🎯 GET QR':
+      bot.send_photo(
+          message.chat.id,
+          'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=ABHISHEK_QR_EARNING',
+          caption=(
+              '🎯 *QR Code Generated Successfully!*\n\nIs QR code ko scan'
+              ' karein ya share karein taaki aapki earnings aur badhe.'
+          ),
+          reply_markup=get_main_keyboard(),
+      )
+
+    elif text in ['💰 My Balance', '👤 My Account']:
       cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
       user = cursor.fetchone()
       if user:
-        balance = user['balance']
+        bal = user['balance']
         earned = user['total_earned']
         withdrawn = user['total_withdrawn']
-        fname = user['first_name']
-        uname = user['username']
-
-        text = (
-            f'📊 *YOUR ACCOUNT STATS*\n\n👤 Name: {fname}\n🔗 Username:'
-            f' @{uname}\n🆔 User ID: `{user_id}`\n💰 Current Balance:'
-            f' ₹{balance:.2f}\n🎁 Total Earned: ₹{earned:.2f}\n💸 Total'
-            f' Withdrawn: ₹{withdrawn:.2f}'
+        notif = 'ON' if user['notifications'] == 1 else 'OFF'
+        msg_text = (
+            f'📊 *YOUR ACCOUNT STATS*\n\n👤 Name: {user["first_name"]}\n🔗'
+            f' Username: @{user["username"]}\n🆔 User ID:'
+            f' `{user_id}`\n💰 Current Balance: ₹{bal:.2f}\n🎁 Total Earned:'
+            f' ₹{earned:.2f}\n💸 Total Withdrawn: ₹{withdrawn:.2f}'
         )
-        bot.answer_callback_query(call.id)
-        safe_send_message(call.message.chat.id, text)
+        safe_send_message(
+            message.chat.id, msg_text, reply_markup=get_main_keyboard()
+        )
       else:
-        bot.answer_callback_query(
-            call.id, 'User not found! Please /start again.'
+        safe_send_message(
+            message.chat.id,
+            'User not found! Please send /start',
+            reply_markup=get_main_keyboard(),
         )
 
-    elif data == 'request_withdrawal':
-      bot.answer_callback_query(call.id)
+    elif text == '💸 Withdraw Money':
       msg = safe_send_message(
-          call.message.chat.id,
+          message.chat.id,
           '💳 *Kripya apni sahi UPI ID bhejein (jaise: `yourname@paytm`):*',
+          reply_markup=get_main_keyboard(),
       )
       bot.register_next_step_handler(msg, process_withdrawal_upi)
 
-    elif data == 'admin_panel':
+    elif text == '📜 Withdrawal History':
+      cursor.execute('SELECT * FROM withdrawals WHERE user_id = ?', (user_id,))
+      history = cursor.fetchall()
+      if not history:
+        safe_send_message(
+            message.chat.id,
+            '📜 Aapne abhi tak koi withdrawal request nahi bheji hai.',
+            reply_markup=get_main_keyboard(),
+        )
+      else:
+        hist_text = '📜 *Your Withdrawal History:*\n\n'
+        for h in history:
+          hist_text += (
+              f'🆔 ID: `#{h["id"]}` | Amount: ₹{h["amount"]:.2f} | UPI:'
+              f' `{h["upi_id"]}` | Status: *{h["status"]}*\n'
+          )
+        safe_send_message(
+            message.chat.id, hist_text, reply_markup=get_main_keyboard()
+        )
+
+    elif text == '💎 Invite & Earn':
+      bot_info = bot.get_me()
+      ref_link = f'https://t.me/{bot_info.username}?start={user_id}'
+      safe_send_message(
+          message.chat.id,
+          f'💎 *Invite & Earn Program*\n\nApne doston ko invite karein aur har'
+          f' invite par reward paayein!\n\nAapka referral link:\n`{ref_link}`',
+          reply_markup=get_main_keyboard(),
+      )
+
+    elif text == '📋 Task History':
+      cursor.execute(
+          'SELECT * FROM tasks WHERE user_id = ? ORDER BY id DESC LIMIT 10',
+          (user_id,),
+      )
+      tasks = cursor.fetchall()
+      if not tasks:
+        safe_send_message(
+            message.chat.id,
+            '📋 Aapki task history khali hai.',
+            reply_markup=get_main_keyboard(),
+        )
+      else:
+        t_text = '📋 *Recent Task History:*\n\n'
+        for t in tasks:
+          t_text += f'✔️ {t["task_name"]} - *{t["status"]}*\n'
+        safe_send_message(
+            message.chat.id, t_text, reply_markup=get_main_keyboard()
+        )
+
+    elif text == '🔔 Toggle Notification':
+      cursor.execute('SELECT notifications FROM users WHERE user_id = ?', (user_id,))
+      res = cursor.fetchone()
+      if res:
+        new_val = 0 if res['notifications'] == 1 else 1
+        cursor.execute(
+            'UPDATE users SET notifications = ? WHERE user_id = ?',
+            (new_val, user_id),
+        )
+        conn.commit()
+        status_str = 'ON 🔔' if new_val == 1 else 'OFF 🔕'
+        safe_send_message(
+            message.chat.id,
+            f'🔔 Notifications status successfully updated to: *{status_str}*',
+            reply_markup=get_main_keyboard(),
+        )
+
+    elif text == '🛠 Support':
+      safe_send_message(
+          message.chat.id,
+          '🛠 *Support Center*\n\nKisi bhi samasya ya sawal ke liye official'
+          f' channel par sampark karein:\n🔗 {CHANNEL_USERNAME}',
+          reply_markup=get_main_keyboard(),
+      )
+
+    elif text == '👑 Admin Panel':
       if user_id != ADMIN_ID:
-        bot.answer_callback_query(
-            call.id, '⚠️ You are not authorized!', show_alert=True
+        safe_send_message(
+            message.chat.id,
+            '⚠️ You are not authorized to access Admin Panel!',
+            reply_markup=get_main_keyboard(),
         )
         return
 
-      bot.answer_callback_query(call.id)
       markup = types.InlineKeyboardMarkup(row_width=2)
       markup.add(
           types.InlineKeyboardButton('📊 Bot Stats', callback_data='admin_stats'),
@@ -190,12 +294,63 @@ def handle_callbacks(call):
           ),
       )
       safe_send_message(
-          call.message.chat.id,
+          message.chat.id,
           '🔐 *Admin Control Panel*\n\nNiche se koi option chunein:',
           reply_markup=markup,
       )
 
-    elif data.startswith('admin_'):
+    conn.close()
+  except Exception as e:
+    print(f'Error in reply button handler: {e}')
+
+
+def process_withdrawal_upi(message):
+  try:
+    user_id = message.from_user.id
+    upi_id = message.text.strip()
+    withdrawal_amount = 50.0
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
+    user = cursor.fetchone()
+
+    if user and user['balance'] >= withdrawal_amount:
+      cursor.execute(
+          'INSERT INTO withdrawals (user_id, amount, upi_id, status) VALUES (?,'
+          ' ?, ?, "Pending")',
+          (user_id, withdrawal_amount, upi_id),
+      )
+      conn.commit()
+      conn.close()
+      safe_send_message(
+          message.chat.id,
+          f'✅ *Withdrawal Request Submitted!*\n\n🏦 UPI ID:'
+          f' `{upi_id}`\n💰 Amount: ₹{withdrawal_amount:.2f}\n⏳ Status:'
+          ' *Pending*',
+          reply_markup=get_main_keyboard(),
+      )
+    else:
+      conn.close()
+      safe_send_message(
+          message.chat.id,
+          f'❌ *Aapka balance kam hai!* Minimum withdrawal ₹'
+          f'{withdrawal_amount:.2f} hona chahiye.',
+          reply_markup=get_main_keyboard(),
+      )
+  except Exception as e:
+    print(f'Error in withdrawal: {e}')
+
+
+@bot.callback_query_handler(func=lambda call: True)
+def handle_callbacks(call):
+  try:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    data = call.data
+    user_id = call.from_user.id
+
+    if data.startswith('admin_'):
       if user_id != ADMIN_ID:
         bot.answer_callback_query(
             call.id, '⚠️ You are not authorized!', show_alert=True
@@ -331,42 +486,6 @@ def handle_callbacks(call):
     print(f'Error in callback: {e}')
 
 
-def process_withdrawal_upi(message):
-  try:
-    user_id = message.from_user.id
-    upi_id = message.text.strip()
-    withdrawal_amount = 50.0
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
-    user = cursor.fetchone()
-
-    if user and user['balance'] >= withdrawal_amount:
-      cursor.execute(
-          'INSERT INTO withdrawals (user_id, amount, upi_id, status) VALUES (?,'
-          ' ?, ?, "Pending")',
-          (user_id, withdrawal_amount, upi_id),
-      )
-      conn.commit()
-      conn.close()
-      safe_send_message(
-          message.chat.id,
-          f'✅ *Withdrawal Request Submitted!*\n\n🏦 UPI ID:'
-          f' `{upi_id}`\n💰 Amount: ₹{withdrawal_amount:.2f}\n⏳ Status:'
-          ' *Pending*',
-      )
-    else:
-      conn.close()
-      safe_send_message(
-          message.chat.id,
-          f'❌ *Aapka balance kam hai!* Minimum withdrawal ₹'
-          f'{withdrawal_amount:.2f} hona chahiye.',
-      )
-  except Exception as e:
-    print(f'Error in withdrawal: {e}')
-
-
 def process_broadcast(message):
   try:
     broadcast_text = message.text
@@ -387,6 +506,7 @@ def process_broadcast(message):
     safe_send_message(
         message.chat.id,
         f'📢 *Broadcast Completed!*\n\nSuccessfully sent to `{count}` users.',
+        reply_markup=get_main_keyboard(),
     )
   except Exception as e:
     print(f'Error in broadcast: {e}')
@@ -400,6 +520,7 @@ def process_set_chan(message):
     safe_send_message(
         message.chat.id,
         f'✅ *Official Channel updated successfully to:* `{CHANNEL_USERNAME}`',
+        reply_markup=get_main_keyboard(),
     )
   except Exception as e:
     print(f'Error in set channel: {e}')
