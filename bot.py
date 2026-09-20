@@ -38,9 +38,10 @@ def init_db():
             user_id INTEGER PRIMARY KEY,
             first_name TEXT,
             username TEXT,
-            balance REAL DEFAULT 50.0,
-            total_earned REAL DEFAULT 50.0,
+            balance REAL DEFAULT 0.0,
+            total_earned REAL DEFAULT 0.0,
             total_withdrawn REAL DEFAULT 0.0,
+            total_invited INTEGER DEFAULT 0,
             notifications INTEGER DEFAULT 1
         )
     ''')
@@ -61,6 +62,9 @@ def init_db():
             status TEXT DEFAULT 'Completed'
         )
     ''')
+  
+  # Purana test/fake data ya 50 balance ko clean karne ke liye:
+  cursor.execute("UPDATE users SET balance = 0.0, total_earned = 0.0 WHERE balance = 50.0")
   conn.commit()
   conn.close()
 
@@ -111,7 +115,7 @@ def send_welcome(message):
     cursor = conn.cursor()
     cursor.execute(
         'INSERT OR IGNORE INTO users (user_id, first_name, username, balance,'
-        ' total_earned) VALUES (?, ?, ?, 50.0, 50.0)',
+        ' total_earned) VALUES (?, ?, ?, 0.0, 0.0)',
         (user_id, first_name, username),
     )
     cursor.execute(
@@ -121,10 +125,18 @@ def send_welcome(message):
     conn.commit()
     conn.close()
 
+    welcome_text = (
+        f'👋 *Welcome, {first_name}* 🚀\n\nAapka hamare official QR Earning'
+        ' platform par swagat hai!\n\n🔑 *Key Features:*\n• 🎯 *QR Tasks:* Fast'
+        ' QR scans karke instant earning karein.\n• 🎁 *Referral System:* Per'
+        ' refer ₹1.00 Direct Bonus + 10% Task Commission!\n• 🏧 *Instant'
+        ' Withdraw:* Direct UPI / FamPay payout!\n• 🔔 *Task Alerts:* Direct'
+        ' QR notification pane ke liye Toggle Notification ON rakhein!'
+    )
+
     safe_send_message(
         message.chat.id,
-        f'👋 *Welcome, {first_name}!*\n\nAap niche diye gaye options se apni'
-        ' earnings aur withdrawals manage kar sakte hain.',
+        welcome_text,
         reply_markup=get_main_keyboard(),
     )
   except Exception as e:
@@ -154,31 +166,54 @@ def handle_reply_buttons(message):
     cursor = conn.cursor()
 
     if text == '🎯 GET QR':
-      bot.send_photo(
-          message.chat.id,
-          'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=ABHISHEK_QR_EARNING',
-          caption=(
-              '🎯 *QR Code Generated Successfully!*\n\nIs QR code ko scan'
-              ' karein ya share karein taaki aapki earnings aur badhe.'
-          ),
-          reply_markup=get_main_keyboard(),
+      qr_msg = (
+          '🎯 *QR TASK & CLAIM ZONE* 🎯\n\n⚠️ *IMPORTANT NOTICE:*\nLive QR tasks'
+          ' limited time ke liye aate hain.\n\n📌 *Rules:*\n1️⃣ Get QR par tap'
+          ' karein.\n2️⃣ QR active hone par hi payment claim hogi.\n\n🔔 *LIVE'
+          ' QR ALERTS:*\nNaye QR tasks ke alerts pane ke liye official channel'
+          ' join karein:\n🔗 *Official Channel:*'
+          f' {CHANNEL_USERNAME}\n\n⚡ *Agla QR Task Jald Hi Aayega! Keep'
+          ' Checking!* ⚡'
+      )
+      safe_send_message(message.chat.id, qr_msg, reply_markup=get_main_keyboard())
+
+    elif text == '💰 My Balance':
+      cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+      user = cursor.fetchone()
+      bal = user['balance'] if user else 0.0
+      bal_msg = (
+          f'💰 *YOUR WALLET & TASK STATUS* 💰\n\n🏦 Available Balance:'
+          f' ₹{bal:.2f}\n📌 Per Task Rate: ₹10.00 / QR\n🏧 Minimum Withdrawal'
+          ' Limit: ₹10.00'
+      )
+      safe_send_message(
+          message.chat.id, bal_msg, reply_markup=get_main_keyboard()
       )
 
-    elif text in ['💰 My Balance', '👤 My Account']:
+    elif text == '👤 My Account':
       cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
       user = cursor.fetchone()
       if user:
         bal = user['balance']
         earned = user['total_earned']
         withdrawn = user['total_withdrawn']
-        msg_text = (
-            f'📊 *YOUR ACCOUNT STATS*\n\n👤 Name: {user["first_name"]}\n🔗'
-            f' Username: @{user["username"]}\n🆔 User ID:'
-            f' `{user_id}`\n💰 Current Balance: ₹{bal:.2f}\n🎁 Total Earned:'
-            f' ₹{earned:.2f}\n💸 Total Withdrawn: ₹{withdrawn:.2f}'
+        invited = user['total_invited']
+        notif_status = '🔔 ON' if user['notifications'] == 1 else '🔕 OFF'
+        uname = (
+            f'@{user["username"]}'
+            if user['username'] != 'None'
+            else 'No Username'
+        )
+        acc_msg = (
+            f'👤 *YOUR ACCOUNT PROFILE* 👤\n\n👤 Name:'
+            f' {user["first_name"]}\n🔗 Username: {uname}\n🆔 Telegram ID:'
+            f' `{user_id}`\n\n🏦 Available Balance: ₹{bal:.2f}\n🎁 Total Rewards'
+            f' Earned: ₹{earned:.2f}\n💸 Total Withdrawn:'
+            f' ₹{withdrawn:.2f}\n👥 Total Invited: {invited}'
+            f' Users\n🔔 Task Notifications: {notif_status}'
         )
         safe_send_message(
-            message.chat.id, msg_text, reply_markup=get_main_keyboard()
+            message.chat.id, acc_msg, reply_markup=get_main_keyboard()
         )
       else:
         safe_send_message(
@@ -188,10 +223,16 @@ def handle_reply_buttons(message):
         )
 
     elif text == '💸 Withdraw Money':
+      cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
+      user = cursor.fetchone()
+      bal = user['balance'] if user else 0.0
+      wd_msg = (
+          f'💳 *WITHDRAWAL SECTION* 💳\n\n🏦 Current Balance:'
+          f' ₹{bal:.2f}\n🏧 Minimum Withdrawal: ₹10.00\n\n💡 *Apna UPI ID enter'
+          ' karke request submit karein (Example: `name@upi`):*'
+      )
       msg = safe_send_message(
-          message.chat.id,
-          '💳 *Kripya apni sahi UPI ID bhejein (jaise: `yourname@paytm`):*',
-          reply_markup=get_main_keyboard(),
+          message.chat.id, wd_msg, reply_markup=get_main_keyboard()
       )
       bot.register_next_step_handler(msg, process_withdrawal_upi)
 
@@ -199,13 +240,15 @@ def handle_reply_buttons(message):
       cursor.execute('SELECT * FROM withdrawals WHERE user_id = ?', (user_id,))
       history = cursor.fetchall()
       if not history:
+        hist_text = (
+            f'📜 *WITHDRAWAL HISTORY* 📜\n\n🆔 Telegram ID: `{user_id}`\n\nAbhi'
+            ' tak koi withdrawal record nahi hai.'
+        )
         safe_send_message(
-            message.chat.id,
-            '📜 Aapne abhi tak koi withdrawal request nahi bheji hai.',
-            reply_markup=get_main_keyboard(),
+            message.chat.id, hist_text, reply_markup=get_main_keyboard()
         )
       else:
-        hist_text = '📜 *Your Withdrawal History:*\n\n'
+        hist_text = f'📜 *WITHDRAWAL HISTORY* 📜\n\n🆔 Telegram ID: `{user_id}`\n\n'
         for h in history:
           hist_text += (
               f'🆔 ID: `#{h["id"]}` | Amount: ₹{h["amount"]:.2f} | UPI:'
@@ -218,11 +261,18 @@ def handle_reply_buttons(message):
     elif text == '💎 Invite & Earn':
       bot_info = bot.get_me()
       ref_link = f'https://t.me/{bot_info.username}?start={user_id}'
+      cursor.execute('SELECT total_invited FROM users WHERE user_id = ?', (user_id,))
+      u_row = cursor.fetchone()
+      invited = u_row['total_invited'] if u_row else 0
+      invite_msg = (
+          f'💎 *Invite & Earn Rules:* 💎\n\n💰 *EARNINGS:*\n1️⃣ *Direct Join'
+          ' Bonus:* ₹1.00 per refer!\n2️⃣ *Task Commission:* 10% Extra'
+          ' Commission Jab aapka refer QR Task complete karega!\n\n🔗 *Aapka'
+          f' Personal Referral Link:*\n`{ref_link}`\n\n👥 *Total Invited:*'
+          f' {invited} Users'
+      )
       safe_send_message(
-          message.chat.id,
-          f'💎 *Invite & Earn Program*\n\nApne doston ko invite karein aur har'
-          f' invite par reward paayein!\n\nAapka referral link:\n`{ref_link}`',
-          reply_markup=get_main_keyboard(),
+          message.chat.id, invite_msg, reply_markup=get_main_keyboard()
       )
 
     elif text == '📋 Task History':
@@ -232,13 +282,15 @@ def handle_reply_buttons(message):
       )
       tasks = cursor.fetchall()
       if not tasks:
+        t_text = (
+            '📋 *YOUR TASK HISTORY* 📋\n\nAbhi tak koi task complete nahi kiya'
+            ' hai.'
+        )
         safe_send_message(
-            message.chat.id,
-            '📋 Aapki task history khali hai.',
-            reply_markup=get_main_keyboard(),
+            message.chat.id, t_text, reply_markup=get_main_keyboard()
         )
       else:
-        t_text = '📋 *Recent Task History:*\n\n'
+        t_text = '📋 *YOUR TASK HISTORY* 📋\n\n'
         for t in tasks:
           t_text += f'✔️ {t["task_name"]} - *{t["status"]}*\n'
         safe_send_message(
@@ -255,19 +307,27 @@ def handle_reply_buttons(message):
             (new_val, user_id),
         )
         conn.commit()
-        status_str = 'ON 🔔' if new_val == 1 else 'OFF 🔕'
+        if new_val == 1:
+          notif_msg = (
+              '🔔 *Task Notifications TURNED ON!*\nAapko ab live QR tasks ke'
+              ' instant alerts milenge.'
+          )
+        else:
+          notif_msg = (
+              '🔕 *Task Notifications TURNED OFF!*\nAapko instant task alerts'
+              ' nahi milenge.'
+          )
         safe_send_message(
-            message.chat.id,
-            f'🔔 Notifications status successfully updated to: *{status_str}*',
-            reply_markup=get_main_keyboard(),
+            message.chat.id, notif_msg, reply_markup=get_main_keyboard()
         )
 
     elif text == '🛠 Support':
+      supp_msg = (
+          '🛠 *CUSTOMER SUPPORT* 🛠\n\n👨‍💻 *Owner Username:* `@Abhishek723803`\n⏰'
+          ' *Support Timings:* 10:00 AM - 10:00 PM'
+      )
       safe_send_message(
-          message.chat.id,
-          '🛠 *Support Center*\n\nKisi bhi samasya ya sawal ke liye official'
-          f' channel par sampark karein:\n🔗 {CHANNEL_USERNAME}',
-          reply_markup=get_main_keyboard(),
+          message.chat.id, supp_msg, reply_markup=get_main_keyboard()
       )
 
     elif text == '👑 Admin Panel':
@@ -307,7 +367,7 @@ def process_withdrawal_upi(message):
   try:
     user_id = message.from_user.id
     upi_id = message.text.strip()
-    withdrawal_amount = 50.0
+    withdrawal_amount = 10.0
 
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -333,8 +393,7 @@ def process_withdrawal_upi(message):
       conn.close()
       safe_send_message(
           message.chat.id,
-          f'❌ *Aapka balance kam hai!* Minimum withdrawal ₹'
-          f'{withdrawal_amount:.2f} hona chahiye.',
+          f'❌ *Aapka balance ₹{withdrawal_amount:.2f} se kam hai.*',
           reply_markup=get_main_keyboard(),
       )
   except Exception as e:
@@ -532,7 +591,9 @@ if __name__ == '__main__':
   print('Flask server started...')
 
   try:
-    bot.remove_webhook(remove_pending=True)
+    bot.remove_webhook()
+    bot.delete_webhook(drop_pending_updates=True)
+    print('Webhook successfully removed/cleared.')
   except Exception as e:
     print(f'Webhook reset error: {e}')
 
