@@ -575,7 +575,7 @@ def handle_all_callbacks(call):
                     (amt, u_id),
                 )
                 conn.commit()
-                try:
+                                try:
                     bot.edit_message_text(
                         f'❌ *WITHDRAWAL REJECTED!*\nReq #{req_id}\n ₹{amt:.2f} (Refunded)',
                         chat_id=call.message.chat.id,
@@ -584,13 +584,16 @@ def handle_all_callbacks(call):
                     )
                 except Exception:
                     pass
-                                bot.answer_callback_query(call.id, '❌ Rejected & Refunded!')
+                    bot.answer_callback_query(call.id, '❌ Rejected & Refunded!')
+                
                 safe_send_message(
                     u_id,
                     f'❌ *Withdrawal Rejected!*\nYour request #{req_id} of ₹{amt:.2f}'
                     ' was rejected and refunded back to your balance.',
                     parse_mode='Markdown',
                 )
+                
+                
         elif data.startswith('admin_'):
             if call.from_user.id != ADMIN_ID:
                 bot.answer_callback_query(
