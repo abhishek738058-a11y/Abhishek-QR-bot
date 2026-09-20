@@ -411,6 +411,11 @@ if __name__ == '__main__':
   flask_thread.start()
   print('Flask server started...')
 
+  print('Forcing webhook and session reset on Telegram servers...')
+  try:
+    bot.remove_webhook(remove_pending=True)
+  except Exception as e:
+    print(f'Webhook reset error: {e}')
+
   print('Telegram Bot is running successfully...')
-  bot.remove_webhook()
-  bot.infinity_polling()
+  bot.infinity_polling(skip_pending=True)
