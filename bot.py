@@ -1,11 +1,11 @@
-import os
+ import os
 import sqlite3
 import threading
 from flask import Flask
 import telebot
 from telebot import types
 
-API_TOKEN = '8513419896:AAFMs-OxnZE7OjWjPK8gt34cMU9Z5-w1_2E'
+API_TOKEN = '8513419896:AAF8x7I1fi9NNsLA1t0cmbaVczbgaYdKUDw'
 ADMIN_ID = 8411871478
 CHANNEL_USERNAME = 'https://t.me/+757WqqqLLoo4Yjhl'
 
@@ -411,7 +411,6 @@ if __name__ == '__main__':
   flask_thread.start()
   print('Flask server started...')
 
-  print('Forcing webhook and session reset on Telegram servers...')
   try:
     bot.remove_webhook(remove_pending=True)
   except Exception as e:
