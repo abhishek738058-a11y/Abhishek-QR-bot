@@ -559,7 +559,7 @@ def handle_all_callbacks(call):
                     ' has been successfully paid to your UPI!',
                     parse_mode='Markdown',
                 )
-         elif data.startswith('w_reject_'):
+    elif data.startswith('w_reject_'):
         req_id = int(data.split('_')[2])
         cursor.execute(
             'SELECT user_id, amount FROM withdrawals WHERE id = ?', (req_id,)
@@ -591,14 +591,14 @@ def handle_all_callbacks(call):
                 f'❌ *Withdrawal Rejected!*\nYour request #{req_id} of ₹{amt:.2f}'
                 ' was rejected and refunded back to your balance.',
                 parse_mode='Markdown',
-)
-        
+            )
+
     elif data.startswith('admin_'):
-          elif data.startswith('admin_'):
         if call.from_user.id != ADMIN_ID:
             bot.answer_callback_query(call.id, '⚠️ You are not authorized!', show_alert=True)
             return
             
+                
                 cursor.execute('SELECT COUNT(*) FROM users')
                 tot_users = cursor.fetchone()[0]
                 cursor.execute(
