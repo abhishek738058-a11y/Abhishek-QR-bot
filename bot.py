@@ -5,7 +5,7 @@ from flask import Flask
 import telebot
 from telebot import types
 
-API_TOKEN = '8513419896:AAFYf68xFnJXjzmfcqA6vKMg7VfsxvRIEbU'
+API_TOKEN = '8513419896:AAFzIlJaBL01lMWt4rHUQXTJJGcuokFEmKg'
 ADMIN_ID = 8411871478
 CHANNEL_USERNAME = 'https://t.me/+757WqqqLLoo4Yjhl'
 
@@ -63,7 +63,7 @@ def init_db():
         )
     ''')
   
-  # Purane test/fake data ya 50 balance ko clean karne ke liye:
+  # Purane test balance ko clean karne ke liye:
   cursor.execute("UPDATE users SET balance = 0.0, total_earned = 0.0 WHERE balance = 50.0")
   conn.commit()
   conn.close()
@@ -165,6 +165,20 @@ def handle_reply_buttons(message):
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    # User existence check to prevent errors
+    cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+    user = cursor.fetchone()
+    if not user:
+      first_name = message.from_user.first_name or 'User'
+      username = message.from_user.username or 'None'
+      cursor.execute(
+          'INSERT INTO users (user_id, first_name, username, balance, total_earned) VALUES (?, ?, ?, 0.0, 0.0)',
+          (user_id, first_name, username),
+      )
+      conn.commit()
+      cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+      user = cursor.fetchone()
+
     if text == '🎯 GET QR':
       qr_msg = (
           '🎯 *QR TASK & CLAIM ZONE* 🎯\n\n⚠️ *IMPORTANT NOTICE:*\nLive QR tasks'
@@ -178,8 +192,6 @@ def handle_reply_buttons(message):
       safe_send_message(message.chat.id, qr_msg, reply_markup=get_main_keyboard())
 
     elif text == '💰 My Balance':
-      cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
-      user = cursor.fetchone()
       bal = user['balance'] if user else 0.0
       bal_msg = (
           f'💰 *YOUR WALLET & TASK STATUS* 💰\n\n🏦 Available Balance:'
@@ -191,40 +203,27 @@ def handle_reply_buttons(message):
       )
 
     elif text == '👤 My Account':
-      cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
-      user = cursor.fetchone()
-      if user:
-        bal = user['balance']
-        earned = user['total_earned']
-        withdrawn = user['total_withdrawn']
-        invited = user['total_invited']
-        notif_status = '🔔 ON' if user['notifications'] == 1 else '🔕 OFF'
-        uname = (
-            f'@{user["username"]}'
-            if user['username'] != 'None'
-            else 'No Username'
-        )
-        acc_msg = (
-            f'👤 *YOUR ACCOUNT PROFILE* 👤\n\n👤 Name:'
-            f' {user["first_name"]}\n🔗 Username: {uname}\n🆔 Telegram ID:'
-            f' `{user_id}`\n\n🏦 Available Balance: ₹{bal:.2f}\n🎁 Total Rewards'
-            f' Earned: ₹{earned:.2f}\n💸 Total Withdrawn:'
-            f' ₹{withdrawn:.2f}\n👥 Total Invited: {invited}'
-            f' Users\n🔔 Task Notifications: {notif_status}'
-        )
-        safe_send_message(
-            message.chat.id, acc_msg, reply_markup=get_main_keyboard()
-        )
-      else:
-        safe_send_message(
-            message.chat.id,
-            'User not found! Please send /start',
-            reply_markup=get_main_keyboard(),
-        )
+      bal = user['balance'] if user else 0.0
+      earned = user['total_earned'] if user else 0.0
+      withdrawn = user['total_withdrawn'] if user else 0.0
+      invited = user['total_invited'] if user else 0
+      notif_val = user['notifications'] if user and 'notifications' in user.keys() else 1
+      notif_status = 'ON' if notif_val == 1 else 'OFF'
+      uname = f'@{user["username"]}' if user and user['username'] and user['username'] != 'None' else 'No Username'
+      fname = user['first_name'] if user and user['first_name'] else message.from_user.first_name
+
+      acc_msg = (
+          f'👤 *YOUR ACCOUNT PROFILE* 👤\n\n👤 Name: {fname}\n🔗 Username:'
+          f' {uname}\n🆔 Telegram ID: `{user_id}`\n\n🏦 Available Balance:'
+          f' ₹{bal:.2f}\n🎁 Total Rewards Earned: ₹{earned:.2f}\n💸 Total'
+          f' Withdrawn: ₹{withdrawn:.2f}\n👥 Total Invited: {invited}'
+          f' Users\n🔔 Task Notifications: {notif_status}'
+      )
+      safe_send_message(
+          message.chat.id, acc_msg, reply_markup=get_main_keyboard()
+      )
 
     elif text == '💸 Withdraw Money':
-      cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
-      user = cursor.fetchone()
       bal = user['balance'] if user else 0.0
       wd_msg = (
           f'💳 *WITHDRAWAL SECTION* 💳\n\n🏦 Current Balance:'
@@ -261,9 +260,7 @@ def handle_reply_buttons(message):
     elif text == '💎 Invite & Earn':
       bot_info = bot.get_me()
       ref_link = f'https://t.me/{bot_info.username}?start={user_id}'
-      cursor.execute('SELECT total_invited FROM users WHERE user_id = ?', (user_id,))
-      u_row = cursor.fetchone()
-      invited = u_row['total_invited'] if u_row else 0
+      invited = user['total_invited'] if user else 0
       invite_msg = (
           f'💎 *Invite & Earn Rules:* 💎\n\n💰 *EARNINGS:*\n1️⃣ *Direct Join'
           ' Bonus:* ₹1.00 per refer!\n2️⃣ *Task Commission:* 10% Extra'
@@ -298,28 +295,26 @@ def handle_reply_buttons(message):
         )
 
     elif text == '🔔 Toggle Notification':
-      cursor.execute('SELECT notifications FROM users WHERE user_id = ?', (user_id,))
-      res = cursor.fetchone()
-      if res:
-        new_val = 0 if res['notifications'] == 1 else 1
-        cursor.execute(
-            'UPDATE users SET notifications = ? WHERE user_id = ?',
-            (new_val, user_id),
+      current_notif = user['notifications'] if user and 'notifications' in user.keys() else 1
+      new_val = 0 if current_notif == 1 else 1
+      cursor.execute(
+          'UPDATE users SET notifications = ? WHERE user_id = ?',
+          (new_val, user_id),
+      )
+      conn.commit()
+      if new_val == 1:
+        notif_msg = (
+            '🔔 *Task Notifications TURNED ON!*\nAapko ab live QR tasks ke'
+            ' instant alerts milenge.'
         )
-        conn.commit()
-        if new_val == 1:
-          notif_msg = (
-              '🔔 *Task Notifications TURNED ON!*\nAapko ab live QR tasks ke'
-              ' instant alerts milenge.'
-          )
-        else:
-          notif_msg = (
-              '🔕 *Task Notifications TURNED OFF!*\nAapko instant task alerts'
-              ' nahi milenge.'
-          )
-        safe_send_message(
-            message.chat.id, notif_msg, reply_markup=get_main_keyboard()
+      else:
+        notif_msg = (
+            '🔕 *Task Notifications TURNED OFF!*\nAapko instant task alerts'
+            ' nahi milenge.'
         )
+      safe_send_message(
+          message.chat.id, notif_msg, reply_markup=get_main_keyboard()
+      )
 
     elif text == '🛠 Support':
       supp_msg = (
