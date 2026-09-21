@@ -5,13 +5,15 @@ from flask import Flask
 import telebot
 from telebot import types
 
-API_TOKEN = '8513419896:AAFzIlJaBL01lMWt4rHUQXTJJGcuokFEmKg'
+API_TOKEN = '8513419896:AAFSENIzaNTLkLQQpuq3lUsV1ZF0ae4TYkk'
 ADMIN_ID = 8411871478
 CHANNEL_USERNAME = 'https://t.me/+757WqqqLLoo4Yjhl'
 
 bot = telebot.TeleBot(API_TOKEN)
 
 app = Flask('')
+
+user_states = {}
 
 
 @app.route('/')
@@ -63,7 +65,6 @@ def init_db():
         )
     ''')
   
-  # Purane test balance ko clean karne ke liye:
   cursor.execute("UPDATE users SET balance = 0.0, total_earned = 0.0 WHERE balance = 50.0")
   conn.commit()
   conn.close()
@@ -71,8 +72,7 @@ def init_db():
 
 init_db()
 
-
-def get_main_keyboard():
+def get_main_keyboard(user_id=None):
   markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
   markup.add(
       types.KeyboardButton('🎯 GET QR'), types.KeyboardButton('💰 My Balance')
@@ -90,7 +90,10 @@ def get_main_keyboard():
       types.KeyboardButton('🔔 Toggle Notification'),
   )
   markup.add(types.KeyboardButton('🛠 Support'))
-  markup.add(types.KeyboardButton('👑 Admin Panel'))
+  
+  if user_id == ADMIN_ID:
+    markup.add(types.KeyboardButton('👑 Admin Panel'))
+    
   return markup
 
 
@@ -137,7 +140,7 @@ def send_welcome(message):
     safe_send_message(
         message.chat.id,
         welcome_text,
-        reply_markup=get_main_keyboard(),
+        reply_markup=get_main_keyboard(user_id),
     )
   except Exception as e:
     print(f'Error in start: {e}')
@@ -165,7 +168,6 @@ def handle_reply_buttons(message):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # User existence check to prevent errors
     cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
     user = cursor.fetchone()
     if not user:
@@ -180,16 +182,13 @@ def handle_reply_buttons(message):
       user = cursor.fetchone()
 
     if text == '🎯 GET QR':
+      markup = types.InlineKeyboardMarkup()
+      markup.add(types.InlineKeyboardButton('💳 Make Payment', callback_data='make_payment'))
       qr_msg = (
-          '🎯 *QR TASK & CLAIM ZONE* 🎯\n\n⚠️ *IMPORTANT NOTICE:*\nLive QR tasks'
-          ' limited time ke liye aate hain.\n\n📌 *Rules:*\n1️⃣ Get QR par tap'
-          ' karein.\n2️⃣ QR active hone par hi payment claim hogi.\n\n🔔 *LIVE'
-          ' QR ALERTS:*\nNaye QR tasks ke alerts pane ke liye official channel'
-          ' join karein:\n🔗 *Official Channel:*'
-          f' {CHANNEL_USERNAME}\n\n⚡ *Agla QR Task Jald Hi Aayega! Keep'
-          ' Checking!* ⚡'
+          '🎯 *QR AVAILABLE*\n\n🎁 Reward: ₹10.0\n\n'
+          'Tap the button below to claim this QR.'
       )
-      safe_send_message(message.chat.id, qr_msg, reply_markup=get_main_keyboard())
+      safe_send_message(message.chat.id, qr_msg, reply_markup=markup)
 
     elif text == '💰 My Balance':
       bal = user['balance'] if user else 0.0
@@ -199,7 +198,7 @@ def handle_reply_buttons(message):
           ' Limit: ₹10.00'
       )
       safe_send_message(
-          message.chat.id, bal_msg, reply_markup=get_main_keyboard()
+          message.chat.id, bal_msg, reply_markup=get_main_keyboard(user_id)
       )
 
     elif text == '👤 My Account':
@@ -220,7 +219,7 @@ def handle_reply_buttons(message):
           f' Users\n🔔 Task Notifications: {notif_status}'
       )
       safe_send_message(
-          message.chat.id, acc_msg, reply_markup=get_main_keyboard()
+          message.chat.id, acc_msg, reply_markup=get_main_keyboard(user_id)
       )
 
     elif text == '💸 Withdraw Money':
@@ -231,7 +230,7 @@ def handle_reply_buttons(message):
           ' karke request submit karein (Example: `name@upi`):*'
       )
       msg = safe_send_message(
-          message.chat.id, wd_msg, reply_markup=get_main_keyboard()
+          message.chat.id, wd_msg, reply_markup=get_main_keyboard(user_id)
       )
       bot.register_next_step_handler(msg, process_withdrawal_upi)
 
@@ -244,7 +243,7 @@ def handle_reply_buttons(message):
             ' tak koi withdrawal record nahi hai.'
         )
         safe_send_message(
-            message.chat.id, hist_text, reply_markup=get_main_keyboard()
+            message.chat.id, hist_text, reply_markup=get_main_keyboard(user_id)
         )
       else:
         hist_text = f'📜 *WITHDRAWAL HISTORY* 📜\n\n🆔 Telegram ID: `{user_id}`\n\n'
@@ -254,10 +253,9 @@ def handle_reply_buttons(message):
               f' `{h["upi_id"]}` | Status: *{h["status"]}*\n'
           )
         safe_send_message(
-            message.chat.id, hist_text, reply_markup=get_main_keyboard()
-        )
-
-    elif text == '💎 Invite & Earn':
+            message.chat.id, hist_text, reply_markup=get_main_keyboard(user_id)
+    )
+elif text == '💎 Invite & Earn':
       bot_info = bot.get_me()
       ref_link = f'https://t.me/{bot_info.username}?start={user_id}'
       invited = user['total_invited'] if user else 0
@@ -269,7 +267,7 @@ def handle_reply_buttons(message):
           f' {invited} Users'
       )
       safe_send_message(
-          message.chat.id, invite_msg, reply_markup=get_main_keyboard()
+          message.chat.id, invite_msg, reply_markup=get_main_keyboard(user_id)
       )
 
     elif text == '📋 Task History':
@@ -284,14 +282,14 @@ def handle_reply_buttons(message):
             ' hai.'
         )
         safe_send_message(
-            message.chat.id, t_text, reply_markup=get_main_keyboard()
+            message.chat.id, t_text, reply_markup=get_main_keyboard(user_id)
         )
       else:
         t_text = '📋 *YOUR TASK HISTORY* 📋\n\n'
         for t in tasks:
           t_text += f'✔️ {t["task_name"]} - *{t["status"]}*\n'
         safe_send_message(
-            message.chat.id, t_text, reply_markup=get_main_keyboard()
+            message.chat.id, t_text, reply_markup=get_main_keyboard(user_id)
         )
 
     elif text == '🔔 Toggle Notification':
@@ -307,13 +305,13 @@ def handle_reply_buttons(message):
             '🔔 *Task Notifications TURNED ON!*\nAapko ab live QR tasks ke'
             ' instant alerts milenge.'
         )
-      else:
+else:
         notif_msg = (
             '🔕 *Task Notifications TURNED OFF!*\nAapko instant task alerts'
             ' nahi milenge.'
         )
       safe_send_message(
-          message.chat.id, notif_msg, reply_markup=get_main_keyboard()
+          message.chat.id, notif_msg, reply_markup=get_main_keyboard(user_id)
       )
 
     elif text == '🛠 Support':
@@ -322,7 +320,7 @@ def handle_reply_buttons(message):
           ' *Support Timings:* 10:00 AM - 10:00 PM'
       )
       safe_send_message(
-          message.chat.id, supp_msg, reply_markup=get_main_keyboard()
+          message.chat.id, supp_msg, reply_markup=get_main_keyboard(user_id)
       )
 
     elif text == '👑 Admin Panel':
@@ -330,7 +328,7 @@ def handle_reply_buttons(message):
         safe_send_message(
             message.chat.id,
             '⚠️ You are not authorized to access Admin Panel!',
-            reply_markup=get_main_keyboard(),
+            reply_markup=get_main_keyboard(user_id),
         )
         return
 
@@ -352,8 +350,7 @@ def handle_reply_buttons(message):
           '🔐 *Admin Control Panel*\n\nNiche se koi option chunein:',
           reply_markup=markup,
       )
-
-    conn.close()
+conn.close()
   except Exception as e:
     print(f'Error in reply button handler: {e}')
 
@@ -382,20 +379,18 @@ def process_withdrawal_upi(message):
           f'✅ *Withdrawal Request Submitted!*\n\n🏦 UPI ID:'
           f' `{upi_id}`\n💰 Amount: ₹{withdrawal_amount:.2f}\n⏳ Status:'
           ' *Pending*',
-          reply_markup=get_main_keyboard(),
+          reply_markup=get_main_keyboard(user_id),
       )
     else:
       conn.close()
       safe_send_message(
           message.chat.id,
           f'❌ *Aapka balance ₹{withdrawal_amount:.2f} se kam hai.*',
-          reply_markup=get_main_keyboard(),
+          reply_markup=get_main_keyboard(user_id),
       )
   except Exception as e:
     print(f'Error in withdrawal: {e}')
-
-
-@bot.callback_query_handler(func=lambda call: True)
+    @bot.callback_query_handler(func=lambda call: True)
 def handle_callbacks(call):
   try:
     conn = get_db_connection()
@@ -403,7 +398,54 @@ def handle_callbacks(call):
     data = call.data
     user_id = call.from_user.id
 
-    if data.startswith('admin_'):
+    if data == 'make_payment':
+      bot.answer_callback_query(call.id)
+      markup = types.InlineKeyboardMarkup()
+      markup.add(types.InlineKeyboardButton('📤 Submit', callback_data='submit_proof'))
+      
+      qr_caption = (
+          '✅ *QR successfully claimed!*\n\n'
+          '🎁 Reward: ₹10.0\n'
+          '⏱ You have 4 minutes to complete and submit this task.\n\n'
+          '💳 *Payment QR*\nComplete the payment and then submit your proof.'
+      )
+      safe_send_message(call.message.chat.id, qr_caption, reply_markup=markup)
+
+    elif data == 'submit_proof':
+      bot.answer_callback_query(call.id)
+      user_states[user_id] = 'waiting_for_proof'
+      safe_send_message(
+          call.message.chat.id,
+          '📤 *Submit Task*\n\n📸 Please upload a screenshot showing that you completed the task.\n\n⚠️ Send the screenshot as a photo.'
+      )
+elif data.startswith('approve_task_'):
+      if user_id != ADMIN_ID:
+        return
+      target_user_id = int(data.split('_')[2])
+      
+      cursor.execute('UPDATE users SET balance = balance + 10.0, total_earned = total_earned + 10.0 WHERE user_id = ?', (target_user_id,))
+      cursor.execute('INSERT INTO tasks (user_id, task_name, status) VALUES (?, "QR Task", "Completed")', (target_user_id,))
+      conn.commit()
+      
+      bot.answer_callback_query(call.id, '✅ Task Approved!')
+      safe_send_message(call.message.chat.id, f'✅ Task Approved for User `{target_user_id}`! Reward of ₹10.0 added.')
+      safe_send_message(
+          target_user_id,
+          '🎉 *Task Approved!*\n\n🎁 Reward: ₹10.0\n💰 Added to your balance.'
+      )
+
+    elif data.startswith('reject_task_'):
+      if user_id != ADMIN_ID:
+        return
+      target_user_id = int(data.split('_')[2])
+      bot.answer_callback_query(call.id, '❌ Task Rejected!')
+      safe_send_message(call.message.chat.id, f'❌ Task Rejected for User `{target_user_id}`.')
+      safe_send_message(
+          target_user_id,
+          '❌ *Task Rejected!*\nAapka proof reject kar diya gaya hai. Kripya sahi screenshot bhejein.'
+      )
+
+    elif data.startswith('admin_'):
       if user_id != ADMIN_ID:
         bot.answer_callback_query(
             call.id, '⚠️ You are not authorized!', show_alert=True
@@ -431,7 +473,7 @@ def handle_callbacks(call):
         bot.answer_callback_query(call.id)
         safe_send_message(call.message.chat.id, stats_msg)
 
-      elif data == 'admin_pending_w':
+elif data == 'admin_pending_w':
         cursor.execute('SELECT * FROM withdrawals WHERE status = "Pending"')
         pending = cursor.fetchall()
         if not pending:
@@ -519,8 +561,7 @@ def handle_callbacks(call):
         bot.answer_callback_query(
             call.id, '⚠️ Request already processed!', show_alert=True
         )
-
-    elif data.startswith('w_reject_'):
+elif data.startswith('w_reject_'):
       if user_id != ADMIN_ID:
         return
       r_id = int(data.split('_')[2])
@@ -537,6 +578,30 @@ def handle_callbacks(call):
     conn.close()
   except Exception as e:
     print(f'Error in callback: {e}')
+
+
+@bot.message_handler(content_types=['photo'])
+def handle_photos(message):
+  try:
+    user_id = message.from_user.id
+    if user_states.get(user_id) == 'waiting_for_proof':
+      user_states[user_id] = None
+      
+      safe_send_message(
+          message.chat.id,
+          '✅ *Screenshot Submitted!*\n\n📥 Your proof has been sent to the admin for review.'
+      )
+      
+      markup = types.InlineKeyboardMarkup(row_width=2)
+      markup.add(
+          types.InlineKeyboardButton('✅ Approve', callback_data=f'approve_task_{user_id}'),
+          types.InlineKeyboardButton('❌ Reject', callback_data=f'reject_task_{user_id}')
+      )
+      
+      caption = f'📸 *New Payment Proof Received!*\n\n👤 User ID: `{user_id}`\n👤 Name: {message.from_user.first_name}'
+      bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption, parse_mode='Markdown', reply_markup=markup)
+  except Exception as e:
+    print(f'Error handling photo: {e}')
 
 
 def process_broadcast(message):
@@ -559,7 +624,7 @@ def process_broadcast(message):
     safe_send_message(
         message.chat.id,
         f'📢 *Broadcast Completed!*\n\nSuccessfully sent to `{count}` users.',
-        reply_markup=get_main_keyboard(),
+        reply_markup=get_main_keyboard(message.from_user.id),
     )
   except Exception as e:
     print(f'Error in broadcast: {e}')
@@ -573,7 +638,7 @@ def process_set_chan(message):
     safe_send_message(
         message.chat.id,
         f'✅ *Official Channel updated successfully to:* `{CHANNEL_USERNAME}`',
-        reply_markup=get_main_keyboard(),
+        reply_markup=get_main_keyboard(message.from_user.id),
     )
   except Exception as e:
     print(f'Error in set channel: {e}')
