@@ -1,16 +1,12 @@
 import os
 import sqlite3
 import threading
-import logging
+import time
 from flask import Flask
 import telebot
 from telebot import types
 
-# Suppress Flask development server warning logs
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
-
-API_TOKEN = '8513419896:AAFSENIzaNTLkLQQpuq3lUsV1ZF0ae4TYkk'
+API_TOKEN = '8513419896:AAGjNu8vXEiJCUYjWZPSGtPoW6_0wRuQwpo'
 ADMIN_ID = 8411871478
 CHANNEL_USERNAME = 'https://t.me/+757WqqqLLoo4Yjhl'
 
@@ -108,30 +104,8 @@ def safe_send_message(chat_id, text, parse_mode='Markdown', reply_markup=None):
     return bot.send_message(
         chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup
     )
-  except telebot.apihelper.ApiTelegramException as e:
-    if e.error_code == 403:
-      print(f"Ignored 403 error for chat_id {chat_id}: user blocked bot or account deactivated.")
-    else:
-      print(f'Telegram API Error sending message to {chat_id}: {e}')
-    return None
   except Exception as e:
     print(f'Error sending message: {e}')
-    return None
-
-
-def safe_send_photo(chat_id, photo, caption=None, parse_mode='Markdown', reply_markup=None):
-  try:
-    return bot.send_photo(
-        chat_id, photo, caption=caption, parse_mode=parse_mode, reply_markup=reply_markup
-    )
-  except telebot.apihelper.ApiTelegramException as e:
-    if e.error_code == 403:
-      print(f"Ignored 403 error for chat_id {chat_id}: user blocked bot or account deactivated.")
-    else:
-      print(f'Telegram API Error sending photo to {chat_id}: {e}')
-    return None
-  except Exception as e:
-    print(f'Error sending photo: {e}')
     return None
 
 
@@ -633,7 +607,7 @@ def handle_photos(message):
       )
       
       caption = f'📸 *New Payment Proof Received!*\n\n👤 User ID: `{user_id}`\n👤 Name: {message.from_user.first_name}'
-      safe_send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption, parse_mode='Markdown', reply_markup=markup)
+      bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption, parse_mode='Markdown', reply_markup=markup)
   except Exception as e:
     print(f'Error handling photo: {e}')
 
@@ -650,7 +624,7 @@ def process_broadcast(message):
     count = 0
     for u in users:
       try:
-        safe_send_message(u['user_id'], broadcast_text, parse_mode='Markdown')
+        bot.send_message(u['user_id'], broadcast_text, parse_mode='Markdown')
         count += 1
       except Exception:
         pass
@@ -684,6 +658,7 @@ if __name__ == '__main__':
   flask_thread.start()
   print('Flask server started...')
 
+  # Clear webhooks and pending updates to prevent Conflict errors completely
   try:
     bot.remove_webhook()
     bot.delete_webhook(drop_pending_updates=True)
@@ -692,4 +667,11 @@ if __name__ == '__main__':
     print(f'Webhook reset error: {e}')
 
   print('Telegram Bot is running successfully...')
-  bot.infinity_polling(skip_pending=True)
+  
+  # Polling loop with crash protection and auto-reconnect
+  while True:
+    try:
+      bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
+    except Exception as e:
+      print(f'Polling error encountered: {e}')
+      time.sleep(5)
