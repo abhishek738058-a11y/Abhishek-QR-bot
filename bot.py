@@ -72,6 +72,7 @@ def init_db():
 
 init_db()
 
+
 def get_main_keyboard(user_id=None):
   markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
   markup.add(
@@ -254,8 +255,9 @@ def handle_reply_buttons(message):
           )
         safe_send_message(
             message.chat.id, hist_text, reply_markup=get_main_keyboard(user_id)
-    )
-elif text == '💎 Invite & Earn':
+        )
+
+    elif text == '💎 Invite & Earn':
       bot_info = bot.get_me()
       ref_link = f'https://t.me/{bot_info.username}?start={user_id}'
       invited = user['total_invited'] if user else 0
@@ -305,7 +307,7 @@ elif text == '💎 Invite & Earn':
             '🔔 *Task Notifications TURNED ON!*\nAapko ab live QR tasks ke'
             ' instant alerts milenge.'
         )
-else:
+      else:
         notif_msg = (
             '🔕 *Task Notifications TURNED OFF!*\nAapko instant task alerts'
             ' nahi milenge.'
@@ -350,7 +352,8 @@ else:
           '🔐 *Admin Control Panel*\n\nNiche se koi option chunein:',
           reply_markup=markup,
       )
-conn.close()
+
+    conn.close()
   except Exception as e:
     print(f'Error in reply button handler: {e}')
 
@@ -390,7 +393,9 @@ def process_withdrawal_upi(message):
       )
   except Exception as e:
     print(f'Error in withdrawal: {e}')
-    @bot.callback_query_handler(func=lambda call: True)
+
+
+@bot.callback_query_handler(func=lambda call: True)
 def handle_callbacks(call):
   try:
     conn = get_db_connection()
@@ -418,7 +423,8 @@ def handle_callbacks(call):
           call.message.chat.id,
           '📤 *Submit Task*\n\n📸 Please upload a screenshot showing that you completed the task.\n\n⚠️ Send the screenshot as a photo.'
       )
-elif data.startswith('approve_task_'):
+
+    elif data.startswith('approve_task_'):
       if user_id != ADMIN_ID:
         return
       target_user_id = int(data.split('_')[2])
@@ -473,7 +479,7 @@ elif data.startswith('approve_task_'):
         bot.answer_callback_query(call.id)
         safe_send_message(call.message.chat.id, stats_msg)
 
-elif data == 'admin_pending_w':
+      elif data == 'admin_pending_w':
         cursor.execute('SELECT * FROM withdrawals WHERE status = "Pending"')
         pending = cursor.fetchall()
         if not pending:
@@ -561,7 +567,8 @@ elif data == 'admin_pending_w':
         bot.answer_callback_query(
             call.id, '⚠️ Request already processed!', show_alert=True
         )
-elif data.startswith('w_reject_'):
+
+    elif data.startswith('w_reject_'):
       if user_id != ADMIN_ID:
         return
       r_id = int(data.split('_')[2])
