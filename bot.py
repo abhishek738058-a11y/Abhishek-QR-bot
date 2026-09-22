@@ -1,9 +1,14 @@
 import os
 import sqlite3
 import threading
+import logging
 from flask import Flask
 import telebot
 from telebot import types
+
+# Suppress Flask development server warning logs
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 API_TOKEN = '8513419896:AAFSENIzaNTLkLQQpuq3lUsV1ZF0ae4TYkk'
 ADMIN_ID = 8411871478
@@ -103,8 +108,30 @@ def safe_send_message(chat_id, text, parse_mode='Markdown', reply_markup=None):
     return bot.send_message(
         chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup
     )
+  except telebot.apihelper.ApiTelegramException as e:
+    if e.error_code == 403:
+      print(f"Ignored 403 error for chat_id {chat_id}: user blocked bot or account deactivated.")
+    else:
+      print(f'Telegram API Error sending message to {chat_id}: {e}')
+    return None
   except Exception as e:
     print(f'Error sending message: {e}')
+    return None
+
+
+def safe_send_photo(chat_id, photo, caption=None, parse_mode='Markdown', reply_markup=None):
+  try:
+    return bot.send_photo(
+        chat_id, photo, caption=caption, parse_mode=parse_mode, reply_markup=reply_markup
+    )
+  except telebot.apihelper.ApiTelegramException as e:
+    if e.error_code == 403:
+      print(f"Ignored 403 error for chat_id {chat_id}: user blocked bot or account deactivated.")
+    else:
+      print(f'Telegram API Error sending photo to {chat_id}: {e}')
+    return None
+  except Exception as e:
+    print(f'Error sending photo: {e}')
     return None
 
 
@@ -606,7 +633,7 @@ def handle_photos(message):
       )
       
       caption = f'📸 *New Payment Proof Received!*\n\n👤 User ID: `{user_id}`\n👤 Name: {message.from_user.first_name}'
-      bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption, parse_mode='Markdown', reply_markup=markup)
+      safe_send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption, parse_mode='Markdown', reply_markup=markup)
   except Exception as e:
     print(f'Error handling photo: {e}')
 
@@ -623,7 +650,7 @@ def process_broadcast(message):
     count = 0
     for u in users:
       try:
-        bot.send_message(u['user_id'], broadcast_text, parse_mode='Markdown')
+        safe_send_message(u['user_id'], broadcast_text, parse_mode='Markdown')
         count += 1
       except Exception:
         pass
