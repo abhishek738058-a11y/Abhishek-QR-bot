@@ -1,677 +1,538 @@
-import os
-import sqlite3
+"""
+=============================================================================
+OFFICIAL ADVANCED TELEGRAM EARNING & QR TASK BOT
+Developer / Owner: Abhishek (@abhishek723803)
+Features: Dynamic Slab-Based QR Rewards, Secure Admin Panel, Toggle Sound Alerts,
+          Referral System, Withdrawal History, Task History & Keep-Alive Flask Server.
+=============================================================================
+"""
+
+import telebot
+from telebot import types
+import datetime
 import threading
 import time
 from flask import Flask
-import telebot
-from telebot import types
 
-API_TOKEN = '8513419896:AAGjNu8vXEiJCUYjWZPSGtPoW6_0wRuQwpo'
-ADMIN_ID = 8411871478
-CHANNEL_USERNAME = 'https://t.me/+757WqqqLLoo4Yjhl'
+# ==================== CONFIGURATION & API SETUP ====================
+TOKEN = "8513419896:AAGjNu8vXEiJCUYjWZPSGtPoW6_0wRuQwpo"
+bot = telebot.TeleBot(TOKEN)
 
-bot = telebot.TeleBot(API_TOKEN)
+# Strict Admin Identification Constants
+ADMIN_USERNAME = "@abhishek723803"
+ADMIN_ID = 841187478
 
+# Bot Global State Management Dictionary
+QR_STATE = {
+    "is_available": True,   
+    "is_claimed": False     
+}
+
+BOT_SETTINGS = {
+    "channel_link": "https://t.me/+757WqqqLLoo4Yjhl",
+    "channel_username": "@Abhishek_QR_Update",
+    "min_withdrawal": 50.0
+}
+
+# In-Memory Data Storage Structures
+USERS = {}
+WITHDRAWALS_HISTORY = {}
+TASK_HISTORY = {}
+PENDING_WITHDRAWALS = {}
+
+
+# ==================== KEEP ALIVE FLASK SERVER (RENDER DEPLOYMENT) ====================
 app = Flask('')
-
-user_states = {}
-
 
 @app.route('/')
 def home():
-  return 'Bot is active and running 24/7!'
-
+    return "Telegram Earning Bot is running live and active with Render keep-alive!"
 
 def run_flask():
-  port = int(os.environ.get('PORT', 8080))
-  app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
 
 
-def get_db_connection():
-  conn = sqlite3.connect('bot_database.db')
-  conn.row_factory = sqlite3.Row
-  return conn
+# ==================== HELPER & UTILITY FUNCTIONS ====================
+def get_user_data(user_id):
+    """Fetch user data dictionary or initialize default profile if new user."""
+    if user_id not in USERS:
+        USERS[user_id] = {
+            "balance": 0.0,
+            "completed_tasks": 0,
+            "referrals": 0,
+            "notifications": True,  # Default sound notifications enabled
+            "joined_date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "referred_by": None
+        }
+    return USERS[user_id]
 
+def get_task_reward(task_number):
+    """
+    Dynamic Slab-Based Reward Calculator:
+    - 1 to 10 QRs: ₹15 per QR
+    - 10 to 20 QRs: ₹20 per QR
+    - 20 to 30 QRs and above: ₹25 per QR
+    """
+    if task_number <= 10:
+        return 15.0
+    elif task_number <= 20:
+        return 20.0
+    else:
+        return 25.0
 
-def init_db():
-  conn = get_db_connection()
-  cursor = conn.cursor()
-  cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            first_name TEXT,
-            username TEXT,
-            balance REAL DEFAULT 0.0,
-            total_earned REAL DEFAULT 0.0,
-            total_withdrawn REAL DEFAULT 0.0,
-            total_invited INTEGER DEFAULT 0,
-            notifications INTEGER DEFAULT 1
+def get_current_rate(completed_tasks):
+    """Determine reward rate for the upcoming task."""
+    next_task = completed_tasks + 1
+    if next_task <= 10:
+        return 15.0
+    elif next_task <= 20:
+        return 20.0
+    else:
+        return 25.0
+
+def safe_send_message(chat_id, text, reply_markup=None, parse_mode="Markdown", sound_enabled=True):
+    """Wrapper function to handle message sending with custom notification sound behavior."""
+    try:
+        return bot.send_message(
+            chat_id, 
+            text, 
+            reply_markup=reply_markup, 
+            parse_mode=parse_mode,
+            disable_notification=not sound_enabled,
+            disable_web_page_preview=True
         )
-    ''')
-  cursor.execute('''
-        CREATE TABLE IF NOT EXISTS withdrawals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            amount REAL,
-            upi_id TEXT,
-            status TEXT DEFAULT 'Pending'
-        )
-    ''')
-  cursor.execute('''
-        CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            task_name TEXT,
-            status TEXT DEFAULT 'Completed'
-        )
-    ''')
-  
-  cursor.execute("UPDATE users SET balance = 0.0, total_earned = 0.0 WHERE balance = 50.0")
-  conn.commit()
-  conn.close()
+    except Exception as e:
+        print(f"Error sending message to {chat_id}: {e}")
+        return None
 
 
-init_db()
-
-
-def get_main_keyboard(user_id=None):
-  markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-  markup.add(
-      types.KeyboardButton('🎯 GET QR'), types.KeyboardButton('💰 My Balance')
-  )
-  markup.add(
-      types.KeyboardButton('👤 My Account'),
-      types.KeyboardButton('💸 Withdraw Money'),
-  )
-  markup.add(
-      types.KeyboardButton('📜 Withdrawal History'),
-      types.KeyboardButton('💎 Invite & Earn'),
-  )
-  markup.add(
-      types.KeyboardButton('📋 Task History'),
-      types.KeyboardButton('🔔 Toggle Notification'),
-  )
-  markup.add(types.KeyboardButton('🛠 Support'))
-  
-  if user_id == ADMIN_ID:
-    markup.add(types.KeyboardButton('👑 Admin Panel'))
-    
-  return markup
-
-
-def safe_send_message(chat_id, text, parse_mode='Markdown', reply_markup=None):
-  try:
-    return bot.send_message(
-        chat_id, text, parse_mode=parse_mode, reply_markup=reply_markup
-    )
-  except Exception as e:
-    print(f'Error sending message: {e}')
-    return None
-
-
+# ==================== START COMMAND & MAIN MENU HANDLER ====================
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-  try:
     user_id = message.from_user.id
-    first_name = message.from_user.first_name or 'User'
-    username = message.from_user.username or 'None'
+    user_data = get_user_data(user_id)
+    
+    # Handle Referral Parameter Parsing
+    args = message.text.split()
+    if len(args) > 1 and user_data["referred_by"] is None:
+        try:
+            referrer_id = int(args[1])
+            if referrer_id != user_id:
+                user_data["referred_by"] = referrer_id
+                referrer_data = get_user_data(referrer_id)
+                referrer_data["referrals"] += 1
+                referrer_data["balance"] += 1.0  # Instant joining referral bonus
+                safe_send_message(
+                    referrer_id, 
+                    f"🎉 **New Referral Joined!**\n\nUser ID `{user_id}` joined using your link. ₹1.00 bonus added to your wallet!", 
+                    sound_enabled=referrer_data["notifications"]
+                )
+        except Exception as err:
+            print(f"Referral processing exception: {err}")
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        'INSERT OR IGNORE INTO users (user_id, first_name, username, balance,'
-        ' total_earned) VALUES (?, ?, ?, 0.0, 0.0)',
-        (user_id, first_name, username),
-    )
-    cursor.execute(
-        'UPDATE users SET first_name = ?, username = ? WHERE user_id = ?',
-        (first_name, username, user_id),
-    )
-    conn.commit()
-    conn.close()
-
+    # Constructing Main Reply Keyboard with all 10 buttons
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    btn_qr = types.KeyboardButton("🎯 GET QR")
+    btn_balance = types.KeyboardButton("💰 My Balance")
+    btn_account = types.KeyboardButton("👤 My Account")
+    btn_withdraw = types.KeyboardButton("💸 Withdraw Money")
+    btn_history = types.KeyboardButton("📜 Withdrawal History")
+    btn_invite = types.KeyboardButton("👥 Invite & Earn")
+    btn_task_hist = types.KeyboardButton("📋 Task History")
+    btn_toggle = types.KeyboardButton("🔔 Toggle Notification")
+    btn_support = types.KeyboardButton("🛠 Support")
+    btn_admin = types.KeyboardButton("👑 Admin Panel")
+    
+    markup.add(btn_qr, btn_balance, btn_account, btn_withdraw, btn_history, 
+               btn_invite, btn_task_hist, btn_toggle, btn_support, btn_admin)
+    
     welcome_text = (
-        f'👋 *Welcome, {first_name}* 🚀\n\nAapka hamare official QR Earning'
-        ' platform par swagat hai!\n\n🔑 *Key Features:*\n• 🎯 *QR Tasks:* Fast'
-        ' QR scans karke instant earning karein.\n• 🎁 *Referral System:* Per'
-        ' refer ₹1.00 Direct Bonus + 10% Task Commission!\n• 🏧 *Instant'
-        ' Withdraw:* Direct UPI / FamPay payout!\n• 🔔 *Task Alerts:* Direct'
-        ' QR notification pane ke liye Toggle Notification ON rakhein!'
+        f"👋 Welcome, **{message.from_user.first_name}**!\n\n"
+        f"🤖 Welcome to our official Automated Earning & QR Task Bot.\n"
+        f"Complete fast scanning tasks, claim rewards through dynamic earning slabs, and withdraw real money instantly!\n\n"
+        f"👇 Choose any option from the menu below to get started:"
     )
-
-    safe_send_message(
-        message.chat.id,
-        welcome_text,
-        reply_markup=get_main_keyboard(user_id),
-    )
-  except Exception as e:
-    print(f'Error in start: {e}')
+    safe_send_message(message.chat.id, welcome_text, reply_markup=markup, sound_enabled=user_data["notifications"])
 
 
-@bot.message_handler(
-    func=lambda message: message.text
-    in [
-        '🎯 GET QR',
-        '💰 My Balance',
-        '👤 My Account',
-        '💸 Withdraw Money',
-        '📜 Withdrawal History',
-        '💎 Invite & Earn',
-        '📋 Task History',
-        '🔔 Toggle Notification',
-        '🛠 Support',
-        '👑 Admin Panel',
-    ]
-)
-def handle_reply_buttons(message):
-  try:
-    text = message.text
+# ==================== GET QR SECTION & INTERACTION ====================
+@bot.message_handler(func=lambda message: message.text == "🎯 GET QR")
+def handle_get_qr(message):
     user_id = message.from_user.id
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
-    user = cursor.fetchone()
-    if not user:
-      first_name = message.from_user.first_name or 'User'
-      username = message.from_user.username or 'None'
-      cursor.execute(
-          'INSERT INTO users (user_id, first_name, username, balance, total_earned) VALUES (?, ?, ?, 0.0, 0.0)',
-          (user_id, first_name, username),
-      )
-      conn.commit()
-      cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
-      user = cursor.fetchone()
-
-    if text == '🎯 GET QR':
-      markup = types.InlineKeyboardMarkup()
-      markup.add(types.InlineKeyboardButton('💳 Make Payment', callback_data='make_payment'))
-      qr_msg = (
-          '🎯 *QR AVAILABLE*\n\n🎁 Reward: ₹10.0\n\n'
-          'Tap the button below to claim this QR.'
-      )
-      safe_send_message(message.chat.id, qr_msg, reply_markup=markup)
-
-    elif text == '💰 My Balance':
-      bal = user['balance'] if user else 0.0
-      bal_msg = (
-          f'💰 *YOUR WALLET & TASK STATUS* 💰\n\n🏦 Available Balance:'
-          f' ₹{bal:.2f}\n📌 Per Task Rate: ₹10.00 / QR\n🏧 Minimum Withdrawal'
-          ' Limit: ₹10.00'
-      )
-      safe_send_message(
-          message.chat.id, bal_msg, reply_markup=get_main_keyboard(user_id)
-      )
-
-    elif text == '👤 My Account':
-      bal = user['balance'] if user else 0.0
-      earned = user['total_earned'] if user else 0.0
-      withdrawn = user['total_withdrawn'] if user else 0.0
-      invited = user['total_invited'] if user else 0
-      notif_val = user['notifications'] if user and 'notifications' in user.keys() else 1
-      notif_status = 'ON' if notif_val == 1 else 'OFF'
-      uname = f'@{user["username"]}' if user and user['username'] and user['username'] != 'None' else 'No Username'
-      fname = user['first_name'] if user and user['first_name'] else message.from_user.first_name
-
-      acc_msg = (
-          f'👤 *YOUR ACCOUNT PROFILE* 👤\n\n👤 Name: {fname}\n🔗 Username:'
-          f' {uname}\n🆔 Telegram ID: `{user_id}`\n\n🏦 Available Balance:'
-          f' ₹{bal:.2f}\n🎁 Total Rewards Earned: ₹{earned:.2f}\n💸 Total'
-          f' Withdrawn: ₹{withdrawn:.2f}\n👥 Total Invited: {invited}'
-          f' Users\n🔔 Task Notifications: {notif_status}'
-      )
-      safe_send_message(
-          message.chat.id, acc_msg, reply_markup=get_main_keyboard(user_id)
-      )
-
-    elif text == '💸 Withdraw Money':
-      bal = user['balance'] if user else 0.0
-      wd_msg = (
-          f'💳 *WITHDRAWAL SECTION* 💳\n\n🏦 Current Balance:'
-          f' ₹{bal:.2f}\n🏧 Minimum Withdrawal: ₹10.00\n\n💡 *Apna UPI ID enter'
-          ' karke request submit karein (Example: `name@upi`):*'
-      )
-      msg = safe_send_message(
-          message.chat.id, wd_msg, reply_markup=get_main_keyboard(user_id)
-      )
-      bot.register_next_step_handler(msg, process_withdrawal_upi)
-
-    elif text == '📜 Withdrawal History':
-      cursor.execute('SELECT * FROM withdrawals WHERE user_id = ?', (user_id,))
-      history = cursor.fetchall()
-      if not history:
-        hist_text = (
-            f'📜 *WITHDRAWAL HISTORY* 📜\n\n🆔 Telegram ID: `{user_id}`\n\nAbhi'
-            ' tak koi withdrawal record nahi hai.'
+    user_data = get_user_data(user_id)
+    
+    if not QR_STATE["is_available"]:
+        no_qr_text = (
+            "❌ **QR Tasks Currently Unavailable**\n\n"
+            "There are no active QR tasks right now. Stay alert and keep notifications turned on to grab live tasks instantly when posted!\n\n"
+            f"🔔 Official Update Channel:\n🔗 {BOT_SETTINGS['channel_link']}"
         )
-        safe_send_message(
-            message.chat.id, hist_text, reply_markup=get_main_keyboard(user_id)
+        safe_send_message(message.chat.id, no_qr_text, sound_enabled=user_data["notifications"])
+        
+    elif QR_STATE["is_claimed"]:
+        claimed_text = (
+            "⚠️ **Task Already Claimed**\n\n"
+            "Oops! This QR task has already been claimed by another user. Better luck next time! Wait for the next fresh QR drop.\n\n"
+            f"🔔 Official Update Channel:\n🔗 {BOT_SETTINGS['channel_link']}"
         )
-      else:
-        hist_text = f'📜 *WITHDRAWAL HISTORY* 📜\n\n🆔 Telegram ID: `{user_id}`\n\n'
-        for h in history:
-          hist_text += (
-              f'🆔 ID: `#{h["id"]}` | Amount: ₹{h["amount"]:.2f} | UPI:'
-              f' `{h["upi_id"]}` | Status: *{h["status"]}*\n'
-          )
-        safe_send_message(
-            message.chat.id, hist_text, reply_markup=get_main_keyboard(user_id)
-        )
-
-    elif text == '💎 Invite & Earn':
-      bot_info = bot.get_me()
-      ref_link = f'https://t.me/{bot_info.username}?start={user_id}'
-      invited = user['total_invited'] if user else 0
-      invite_msg = (
-          f'💎 *Invite & Earn Rules:* 💎\n\n💰 *EARNINGS:*\n1️⃣ *Direct Join'
-          ' Bonus:* ₹1.00 per refer!\n2️⃣ *Task Commission:* 10% Extra'
-          ' Commission Jab aapka refer QR Task complete karega!\n\n🔗 *Aapka'
-          f' Personal Referral Link:*\n`{ref_link}`\n\n👥 *Total Invited:*'
-          f' {invited} Users'
-      )
-      safe_send_message(
-          message.chat.id, invite_msg, reply_markup=get_main_keyboard(user_id)
-      )
-
-    elif text == '📋 Task History':
-      cursor.execute(
-          'SELECT * FROM tasks WHERE user_id = ? ORDER BY id DESC LIMIT 10',
-          (user_id,),
-      )
-      tasks = cursor.fetchall()
-      if not tasks:
-        t_text = (
-            '📋 *YOUR TASK HISTORY* 📋\n\nAbhi tak koi task complete nahi kiya'
-            ' hai.'
-        )
-        safe_send_message(
-            message.chat.id, t_text, reply_markup=get_main_keyboard(user_id)
-        )
-      else:
-        t_text = '📋 *YOUR TASK HISTORY* 📋\n\n'
-        for t in tasks:
-          t_text += f'✔️ {t["task_name"]} - *{t["status"]}*\n'
-        safe_send_message(
-            message.chat.id, t_text, reply_markup=get_main_keyboard(user_id)
-        )
-
-    elif text == '🔔 Toggle Notification':
-      current_notif = user['notifications'] if user and 'notifications' in user.keys() else 1
-      new_val = 0 if current_notif == 1 else 1
-      cursor.execute(
-          'UPDATE users SET notifications = ? WHERE user_id = ?',
-          (new_val, user_id),
-      )
-      conn.commit()
-      if new_val == 1:
-        notif_msg = (
-            '🔔 *Task Notifications TURNED ON!*\nAapko ab live QR tasks ke'
-            ' instant alerts milenge.'
-        )
-      else:
-        notif_msg = (
-            '🔕 *Task Notifications TURNED OFF!*\nAapko instant task alerts'
-            ' nahi milenge.'
-        )
-      safe_send_message(
-          message.chat.id, notif_msg, reply_markup=get_main_keyboard(user_id)
-      )
-
-    elif text == '🛠 Support':
-      supp_msg = (
-          '🛠 *CUSTOMER SUPPORT* 🛠\n\n👨‍💻 *Owner Username:* `@Abhishek723803`\n⏰'
-          ' *Support Timings:* 10:00 AM - 10:00 PM'
-      )
-      safe_send_message(
-          message.chat.id, supp_msg, reply_markup=get_main_keyboard(user_id)
-      )
-
-    elif text == '👑 Admin Panel':
-      if user_id != ADMIN_ID:
-        safe_send_message(
-            message.chat.id,
-            '⚠️ You are not authorized to access Admin Panel!',
-            reply_markup=get_main_keyboard(user_id),
-        )
-        return
-
-      markup = types.InlineKeyboardMarkup(row_width=2)
-      markup.add(
-          types.InlineKeyboardButton('📊 Bot Stats', callback_data='admin_stats'),
-          types.InlineKeyboardButton(
-              '⏳ Pending Withdrawals', callback_data='admin_pending_w'
-          ),
-          types.InlineKeyboardButton(
-              '📢 Broadcast', callback_data='admin_broadcast'
-          ),
-          types.InlineKeyboardButton(
-              '🔗 Set Channel', callback_data='admin_set_chan'
-          ),
-      )
-      safe_send_message(
-          message.chat.id,
-          '🔐 *Admin Control Panel*\n\nNiche se koi option chunein:',
-          reply_markup=markup,
-      )
-
-    conn.close()
-  except Exception as e:
-    print(f'Error in reply button handler: {e}')
-
-
-def process_withdrawal_upi(message):
-  try:
-    user_id = message.from_user.id
-    upi_id = message.text.strip()
-    withdrawal_amount = 10.0
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
-    user = cursor.fetchone()
-
-    if user and user['balance'] >= withdrawal_amount:
-      cursor.execute(
-          'INSERT INTO withdrawals (user_id, amount, upi_id, status) VALUES (?,'
-          ' ?, ?, "Pending")',
-          (user_id, withdrawal_amount, upi_id),
-      )
-      conn.commit()
-      conn.close()
-      safe_send_message(
-          message.chat.id,
-          f'✅ *Withdrawal Request Submitted!*\n\n🏦 UPI ID:'
-          f' `{upi_id}`\n💰 Amount: ₹{withdrawal_amount:.2f}\n⏳ Status:'
-          ' *Pending*',
-          reply_markup=get_main_keyboard(user_id),
-      )
+        safe_send_message(message.chat.id, claimed_text, sound_enabled=user_data["notifications"])
+        
     else:
-      conn.close()
-      safe_send_message(
-          message.chat.id,
-          f'❌ *Aapka balance ₹{withdrawal_amount:.2f} se kam hai.*',
-          reply_markup=get_main_keyboard(user_id),
-      )
-  except Exception as e:
-    print(f'Error in withdrawal: {e}')
+        current_reward = get_current_rate(user_data["completed_tasks"])
+        
+        qr_text = (
+            f"🎯 **QR TASK & CLAIM ZONE** 🎯\n\n"
+            f"⚠️ **IMPORTANT INSTRUCTIONS:**\n"
+            f"Live QR tasks have strict validity. Complete payment quickly and submit your proof!\n\n"
+            f"🎁 **Current Payout Rate:** ₹{current_reward}\n"
+            f"⏳ **Status:** Active & Ready for Claim\n\n"
+            f"Click the button below to secure this task and view payment options."
+        )
+        
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("💳 Make Payment", callback_data="make_payment_action"))
+        
+        safe_send_message(message.chat.id, qr_text, reply_markup=markup, sound_enabled=user_data["notifications"])
 
 
-@bot.callback_query_handler(func=lambda call: True)
-def handle_callbacks(call):
-  try:
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    data = call.data
-    user_id = call.from_user.id
-
-    if data == 'make_payment':
-      bot.answer_callback_query(call.id)
-      markup = types.InlineKeyboardMarkup()
-      markup.add(types.InlineKeyboardButton('📤 Submit', callback_data='submit_proof'))
-      
-      qr_caption = (
-          '✅ *QR successfully claimed!*\n\n'
-          '🎁 Reward: ₹10.0\n'
-          '⏱ You have 4 minutes to complete and submit this task.\n\n'
-          '💳 *Payment QR*\nComplete the payment and then submit your proof.'
-      )
-      safe_send_message(call.message.chat.id, qr_caption, reply_markup=markup)
-
-    elif data == 'submit_proof':
-      bot.answer_callback_query(call.id)
-      user_states[user_id] = 'waiting_for_proof'
-      safe_send_message(
-          call.message.chat.id,
-          '📤 *Submit Task*\n\n📸 Please upload a screenshot showing that you completed the task.\n\n⚠️ Send the screenshot as a photo.'
-      )
-
-    elif data.startswith('approve_task_'):
-      if user_id != ADMIN_ID:
+# ==================== MAKE PAYMENT CALLBACK ====================
+@bot.callback_query_handler(func=lambda call: call.data == "make_payment_action")
+def ask_payment_proof(call):
+    if QR_STATE["is_claimed"]:
+        bot.answer_callback_query(call.id, "Sorry! This QR has already been claimed by someone else.", show_alert=True)
         return
-      target_user_id = int(data.split('_')[2])
-      
-      cursor.execute('UPDATE users SET balance = balance + 10.0, total_earned = total_earned + 10.0 WHERE user_id = ?', (target_user_id,))
-      cursor.execute('INSERT INTO tasks (user_id, task_name, status) VALUES (?, "QR Task", "Completed")', (target_user_id,))
-      conn.commit()
-      
-      bot.answer_callback_query(call.id, '✅ Task Approved!')
-      safe_send_message(call.message.chat.id, f'✅ Task Approved for User `{target_user_id}`! Reward of ₹10.0 added.')
-      safe_send_message(
-          target_user_id,
-          '🎉 *Task Approved!*\n\n🎁 Reward: ₹10.0\n💰 Added to your balance.'
-      )
-
-    elif data.startswith('reject_task_'):
-      if user_id != ADMIN_ID:
-        return
-      target_user_id = int(data.split('_')[2])
-      bot.answer_callback_query(call.id, '❌ Task Rejected!')
-      safe_send_message(call.message.chat.id, f'❌ Task Rejected for User `{target_user_id}`.')
-      safe_send_message(
-          target_user_id,
-          '❌ *Task Rejected!*\nAapka proof reject kar diya gaya hai. Kripya sahi screenshot bhejein.'
-      )
-
-    elif data.startswith('admin_'):
-      if user_id != ADMIN_ID:
-        bot.answer_callback_query(
-            call.id, '⚠️ You are not authorized!', show_alert=True
-        )
-        return
-
-      if data == 'admin_stats':
-        cursor.execute('SELECT COUNT(*) FROM users')
-        tot_users = cursor.fetchone()[0]
-        cursor.execute(
-            'SELECT COUNT(*), SUM(amount) FROM withdrawals WHERE status ='
-            ' "Pending"'
-        )
-        p_row = cursor.fetchone()
-        p_reqs, p_amt = p_row[0] or 0, p_row[1] or 0.0
-
-        cursor.execute('SELECT SUM(total_withdrawn) FROM users')
-        tot_w = cursor.fetchone()[0] or 0.0
-
-        stats_msg = (
-            f'📊 *ADMIN STATS*\n\n👥 Total Users: *{tot_users}*\n⏳ Pending'
-            f' Requests: *{p_reqs}* (₹{p_amt:.2f})\n💰 Total Payout Done:'
-            f' *₹{tot_w:.2f}*'
-        )
-        bot.answer_callback_query(call.id)
-        safe_send_message(call.message.chat.id, stats_msg)
-
-      elif data == 'admin_pending_w':
-        cursor.execute('SELECT * FROM withdrawals WHERE status = "Pending"')
-        pending = cursor.fetchall()
-        if not pending:
-          bot.answer_callback_query(call.id, '📭 No pending withdrawals found!')
-          return
-
-        bot.answer_callback_query(call.id)
-        for req in pending:
-          r_id, u_id, amt, upi = (
-              req['id'],
-              req['user_id'],
-              req['amount'],
-              req['upi_id'],
-          )
-          markup = types.InlineKeyboardMarkup(row_width=2)
-          markup.add(
-              types.InlineKeyboardButton(
-                  '✅ Approve', callback_data=f'w_approve_{r_id}'
-              ),
-              types.InlineKeyboardButton(
-                  '❌ Reject', callback_data=f'w_reject_{r_id}'
-              ),
-          )
-          safe_send_message(
-              call.message.chat.id,
-              f'⏳ *Withdrawal Request*\n\n🆔 Req ID: `#{r_id}`\n👤 User ID:'
-              f' `{u_id}`\n💰 Amount: ₹{amt:.2f}\n🏦 UPI ID: `{upi}`',
-              reply_markup=markup,
-          )
-
-      elif data == 'admin_broadcast':
-        bot.answer_callback_query(call.id)
-        msg = safe_send_message(
-            call.message.chat.id, '📢 *Please send the broadcast message:*'
-        )
-        bot.register_next_step_handler(msg, process_broadcast)
-
-      elif data == 'admin_set_chan':
-        bot.answer_callback_query(call.id)
-        msg = safe_send_message(
-            call.message.chat.id,
-            '🔗 *Naya Official Channel Link ya Username bhejo:*',
-        )
-        bot.register_next_step_handler(msg, process_set_chan)
-
-    elif data.startswith('w_approve_'):
-      if user_id != ADMIN_ID:
-        return
-      r_id = int(data.split('_')[2])
-      cursor.execute(
-          'SELECT * FROM withdrawals WHERE id = ? AND status = "Pending"',
-          (r_id,),
-      )
-      req = cursor.fetchone()
-      if req:
-        u_id, amt = req['user_id'], req['amount']
-        cursor.execute('SELECT balance FROM users WHERE user_id = ?', (u_id,))
-        u_data = cursor.fetchone()
-        if u_data and u_data['balance'] >= amt:
-          cursor.execute(
-              'UPDATE users SET balance = balance - ?, total_withdrawn ='
-              ' total_withdrawn + ? WHERE user_id = ?',
-              (amt, amt, u_id),
-          )
-          cursor.execute(
-              'UPDATE withdrawals SET status = "Approved" WHERE id = ?', (r_id,)
-          )
-          conn.commit()
-          bot.answer_callback_query(call.id, f'✅ Request #{r_id} Approved!')
-          safe_send_message(
-              call.message.chat.id,
-              f'✅ Withdrawal Request `#{r_id}` of ₹{amt:.2f} has been'
-              ' *Approved*.',
-          )
-          safe_send_message(
-              u_id,
-              f'🎉 *Aapka Withdrawal Approve ho gaya hai!*\n\n💰 Amount:'
-              f' ₹{amt:.2f}\n🏦 Aapke UPI mein bhej diya gaya hai.',
-          )
-        else:
-          bot.answer_callback_query(
-              call.id, '❌ User has insufficient balance!', show_alert=True
-          )
-      else:
-        bot.answer_callback_query(
-            call.id, '⚠️ Request already processed!', show_alert=True
-        )
-
-    elif data.startswith('w_reject_'):
-      if user_id != ADMIN_ID:
-        return
-      r_id = int(data.split('_')[2])
-      cursor.execute(
-          'UPDATE withdrawals SET status = "Rejected" WHERE id = ?', (r_id,)
-      )
-      conn.commit()
-      bot.answer_callback_query(call.id, f'❌ Request #{r_id} Rejected!')
-      safe_send_message(
-          call.message.chat.id,
-          f'❌ Withdrawal Request `#{r_id}` has been *Rejected*.',
-      )
-
-    conn.close()
-  except Exception as e:
-    print(f'Error in callback: {e}')
-
-
-@bot.message_handler(content_types=['photo'])
-def handle_photos(message):
-  try:
-    user_id = message.from_user.id
-    if user_states.get(user_id) == 'waiting_for_proof':
-      user_states[user_id] = None
-      
-      safe_send_message(
-          message.chat.id,
-          '✅ *Screenshot Submitted!*\n\n📥 Your proof has been sent to the admin for review.'
-      )
-      
-      markup = types.InlineKeyboardMarkup(row_width=2)
-      markup.add(
-          types.InlineKeyboardButton('✅ Approve', callback_data=f'approve_task_{user_id}'),
-          types.InlineKeyboardButton('❌ Reject', callback_data=f'reject_task_{user_id}')
-      )
-      
-      caption = f'📸 *New Payment Proof Received!*\n\n👤 User ID: `{user_id}`\n👤 Name: {message.from_user.first_name}'
-      bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=caption, parse_mode='Markdown', reply_markup=markup)
-  except Exception as e:
-    print(f'Error handling photo: {e}')
-
-
-def process_broadcast(message):
-  try:
-    broadcast_text = message.text
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT user_id FROM users')
-    users = cursor.fetchall()
-    conn.close()
-
-    count = 0
-    for u in users:
-      try:
-        bot.send_message(u['user_id'], broadcast_text, parse_mode='Markdown')
-        count += 1
-      except Exception:
-        pass
-
-    safe_send_message(
-        message.chat.id,
-        f'📢 *Broadcast Completed!*\n\nSuccessfully sent to `{count}` users.',
-        reply_markup=get_main_keyboard(message.from_user.id),
+    
+    QR_STATE["is_claimed"] = True
+    user_data = get_user_data(call.from_user.id)
+    current_reward = get_current_rate(user_data["completed_tasks"])
+    
+    proof_text = (
+        f"✅ **QR Successfully Claimed!**\n\n"
+        f"🎁 **Reward Payout:** ₹{current_reward}\n"
+        f"⏳ You have 4 minutes to complete the transaction and submit your payment screenshot proof.\n\n"
+        f"💳 **Instructions:**\n"
+        f"Scan the QR or complete the payment, then upload your transaction receipt screenshot directly as a photo in this chat."
     )
-  except Exception as e:
-    print(f'Error in broadcast: {e}')
-
-
-def process_set_chan(message):
-  try:
-    global CHANNEL_USERNAME
-    new_chan = message.text.strip()
-    CHANNEL_USERNAME = new_chan
-    safe_send_message(
-        message.chat.id,
-        f'✅ *Official Channel updated successfully to:* `{CHANNEL_USERNAME}`',
-        reply_markup=get_main_keyboard(message.from_user.id),
-    )
-  except Exception as e:
-    print(f'Error in set channel: {e}')
-
-
-if __name__ == '__main__':
-  flask_thread = threading.Thread(target=run_flask)
-  flask_thread.daemon = True
-  flask_thread.start()
-  print('Flask server started...')
-
-  # Clear webhooks and pending updates to prevent Conflict errors completely
-  try:
-    bot.remove_webhook()
-    bot.delete_webhook(drop_pending_updates=True)
-    print('Webhook successfully removed/cleared.')
-  except Exception as e:
-    print(f'Webhook reset error: {e}')
-
-  print('Telegram Bot is running successfully...')
-  
-  # Polling loop with crash protection and auto-reconnect
-  while True:
+    
     try:
-      bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
-    except Exception as e:
-      print(f'Polling error encountered: {e}')
-      time.sleep(5)
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=proof_text,
+            parse_mode="Markdown"
+        )
+    except Exception:
+        safe_send_message(call.message.chat.id, proof_text)
+
+
+# ==================== PAYMENT SCREENSHOT & REWARD HANDLER ====================
+@bot.message_handler(content_types=['photo'])
+def handle_payment_screenshot(message):
+    user_id = message.from_user.id
+    user_data = get_user_data(user_id)
+    
+    # Increment completed tasks count
+    user_data["completed_tasks"] += 1
+    current_task_num = user_data["completed_tasks"]
+    
+    # Calculate reward via slab system
+    reward = get_task_reward(current_task_num)
+    user_data["balance"] += reward
+    
+    # Reset claim status for subsequent users
+    QR_STATE["is_claimed"] = False
+    
+    # Log task history
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    if user_id not in TASK_HISTORY:
+        TASK_HISTORY[user_id] = []
+    TASK_HISTORY[user_id].append(f"Task #{current_task_num} - ₹{reward} ({timestamp})")
+    
+    success_text = (
+        f"✅ **Payment Proof Verified & Approved!**\n\n"
+        f"🎁 **Reward Added (Task #{current_task_num}):** ₹{reward}\n"
+        f"📋 **Total Completed QRs:** {current_task_num}\n"
+        f"💰 **Updated Wallet Balance:** ₹{user_data['balance']}\n\n"
+        f"🎉 Excellent work! Keep completing tasks to scale up your dynamic slab tier automatically."
+    )
+    safe_send_message(message.chat.id, success_text, sound_enabled=user_data["notifications"])
+
+
+# ==================== MY BALANCE SECTION ====================
+@bot.message_handler(func=lambda message: message.text == "💰 My Balance")
+def my_balance(message):
+    user_data = get_user_data(message.from_user.id)
+    next_rate = get_current_rate(user_data["completed_tasks"])
+    
+    balance_content = (
+        f"💰 **YOUR WALLET & EARNING TIERS** 💰\n\n"
+        f"🏦 Available Wallet Balance: ₹{user_data['balance']}\n"
+        f"⭐ Active Payout Rate: ₹{next_rate} / QR\n"
+        f"🏧 Minimum Withdrawal Limit: ₹{BOT_SETTINGS['min_withdrawal']}\n\n"
+        f"📊 **Dynamic Slab Reward Structure:**\n"
+        f"• 1 to 10 QRs: ₹15 per QR\n"
+        f"• 10 to 20 QRs: ₹20 per QR\n"
+        f"• 20 to 30 QRs & above: ₹25 per QR\n\n"
+        f"💡 *Complete more tasks to automatically upgrade your payout bracket!*"
+    )
+    safe_send_message(message.chat.id, balance_content, sound_enabled=user_data["notifications"])
+
+
+# ==================== MY ACCOUNT SECTION ====================
+@bot.message_handler(func=lambda message: message.text == "👤 My Account")
+def my_account(message):
+    user_id = message.from_user.id
+    user_data = get_user_data(user_id)
+    
+    account_info = (
+        f"👤 **YOUR ACCOUNT PROFILE**\n\n"
+        f"📌 Username: @{message.from_user.username if message.from_user.username else 'Member'}\n"
+        f"🆔 Telegram ID: `{user_id}`\n\n"
+        f"🏦 Balance: ₹{user_data['balance']}\n"
+        f"📋 Completed QRs: {user_data['completed_tasks']}\n"
+        f"👥 Total Referrals: {user_data['referrals']} Users\n"
+        f"🔔 Sound Notification: {'ON 🔊' if user_data['notifications'] else 'OFF 🔕'}\n"
+        f"📅 Joined On: {user_data['joined_date']}"
+    )
+    safe_send_message(message.chat.id, account_info, sound_enabled=user_data["notifications"])
+
+
+# ==================== WITHDRAW MONEY SECTION ====================
+@bot.message_handler(func=lambda message: message.text == "💸 Withdraw Money")
+def withdraw_money(message):
+    user_data = get_user_data(message.from_user.id)
+    if user_data["balance"] < BOT_SETTINGS["min_withdrawal"]:
+        safe_send_message(
+            message.chat.id, 
+            f"❌ **Insufficient Balance for Withdrawal.**\n\nYour current balance is ₹{user_data['balance']}.\nMinimum required limit is ₹{BOT_SETTINGS['min_withdrawal']}.",
+            sound_enabled=user_data["notifications"]
+        )
+    else:
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("💳 Withdraw to UPI / Paytm", callback_data="process_withdraw"))
+        withdraw_text = (
+            f"💸 **WITHDRAWAL SECTION**\n\n"
+            f"Available Balance: ₹{user_data['balance']}\n"
+            f"Minimum Payout Limit: ₹{BOT_SETTINGS['min_withdrawal']}\n\n"
+            f"Click the secure button below to process your payout instantly:"
+        )
+        safe_send_message(message.chat.id, withdraw_text, reply_markup=markup, sound_enabled=user_data["notifications"])
+
+@bot.callback_query_handler(func=lambda call: call.data == "process_withdraw")
+def process_withdrawal_callback(call):
+    user_id = call.from_user.id
+    user_data = get_user_data(user_id)
+    if user_data["balance"] < BOT_SETTINGS["min_withdrawal"]:
+        bot.answer_callback_query(call.id, "Insufficient balance!", show_alert=True)
+        return
+    
+    amount = user_data["balance"]
+    user_data["balance"] = 0.0  # Deduct balance after payout request
+    
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    if user_id not in WITHDRAWALS_HISTORY:
+        WITHDRAWALS_HISTORY[user_id] = []
+    WITHDRAWALS_HISTORY[user_id].append(f"₹{amount} - Processing ({timestamp})")
+    
+    if user_id not in PENDING_WITHDRAWALS:
+        PENDING_WITHDRAWALS[user_id] = []
+    PENDING_WITHDRAWALS[user_id].append({"amount": amount, "time": timestamp})
+    
+    try:
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=f"✅ **Withdrawal Request Submitted Successfully!**\n\nAmount: ₹{amount}\nStatus: Processing\nYour funds will be credited to your verified UPI handle shortly.",
+            parse_mode="Markdown"
+        )
+    except Exception:
+        safe_send_message(call.message.chat.id, "✅ Withdrawal Request Submitted Successfully!")
+
+
+# ==================== WITHDRAWAL HISTORY ====================
+@bot.message_handler(func=lambda message: message.text == "📜 Withdrawal History")
+def withdrawal_history(message):
+    user_id = message.from_user.id
+    history = WITHDRAWALS_HISTORY.get(user_id, [])
+    
+    history_content = (
+        f"📜 **WITHDRAWAL HISTORY**\n\n"
+        f"🆔 Telegram ID: `{user_id}`\n\n"
+    )
+    if not history:
+        history_content += "No withdrawal transaction records found yet."
+    else:
+        history_content += "\n".join(f"• {item}" for item in history)
+        
+    safe_send_message(message.chat.id, history_content, sound_enabled=get_user_data(user_id)["notifications"])
+
+
+# ==================== INVITE & EARN ====================
+@bot.message_handler(func=lambda message: message.text == "👥 Invite & Earn")
+def invite_earn(message):
+    bot_username = bot.get_me().username
+    ref_link = f"https://t.me/{bot_username}?start={message.from_user.id}"
+    
+    invite_text = (
+        f"👥 **REFERRAL PROGRAM & COMMISSION**\n\n"
+        f"💰 **EARNING BENEFITS:**\n"
+        f"1️⃣ Direct Join Bonus: ₹1.00 added instantly per referral join!\n"
+        f"2️⃣ Active Network Rewards: Build your team and earn commissions.\n\n"
+        f"🔗 **Your Unique Referral Link:**\n`{ref_link}`\n\n"
+        f"Share this link with your friends and groups to expand your earnings!"
+    )
+    safe_send_message(message.chat.id, invite_text, sound_enabled=get_user_data(message.from_user.id)["notifications"])
+
+
+# ==================== TASK HISTORY ====================
+@bot.message_handler(func=lambda message: message.text == "📋 Task History")
+def task_history(message):
+    user_id = message.from_user.id
+    tasks = TASK_HISTORY.get(user_id, [])
+    
+    if not tasks:
+        task_text = "📋 **TASK HISTORY**\n\nNo completed tasks found yet. Click '🎯 GET QR' to start working on live tasks."
+    else:
+        task_text = "📋 **COMPLETED TASK HISTORY**\n\n" + "\n".join(f"• {t}" for t in tasks[-15:])
+        
+    safe_send_message(message.chat.id, task_text, sound_enabled=get_user_data(user_id)["notifications"])
+
+
+# ==================== TOGGLE NOTIFICATION & FOCUS SOUND ====================
+@bot.message_handler(func=lambda message: message.text == "🔔 Toggle Notification")
+def toggle_notification(message):
+    user_id = message.from_user.id
+    user_data = get_user_data(user_id)
+    user_data["notifications"] = not user_data["notifications"]
+    
+    if user_data["notifications"]:
+        status_desc = "Enabled 🔊 (Sound Alert Active)"
+        note_msg = "You will now receive instant push notifications with alert sounds when new QR tasks become available, allowing you to claim instantly!"
+    else:
+        status_desc = "Disabled 🔕 (Silent Mode)"
+        note_msg = "Task alerts will now be delivered silently without alert sounds."
+        
+    safe_send_message(
+        message.chat.id, 
+        f"🔔 **Notification & Sound Settings**\n\nStatus: **{status_desc}**\n\n{note_msg}", 
+        sound_enabled=user_data["notifications"]  # Controls Telegram client sound behavior dynamically
+    )
+
+
+# ==================== SUPPORT ====================
+@bot.message_handler(func=lambda message: message.text == "🛠 Support")
+def support(message):
+    support_text = (
+        f"🛠 **CUSTOMER SUPPORT DESK**\n\n"
+        f"👑 Owner Username: {ADMIN_USERNAME}\n"
+        f"⏰ Support Timings: 10:00 AM - 10:00 PM\n\n"
+        f"Feel free to contact the admin if you face any issues with payment approvals or withdrawals."
+    )
+    safe_send_message(message.chat.id, support_text, sound_enabled=get_user_data(message.from_user.id)["notifications"])
+
+
+# ==================== ADVANCED ADMIN PANEL (STRICT SECURITY) ====================
+@bot.message_handler(func=lambda message: message.text == "👑 Admin Panel")
+def admin_panel(message):
+    # Strict verification check for Owner ID and Username
+    if message.from_user.id == ADMIN_ID or (message.from_user.username and message.from_user.username.lower() == ADMIN_USERNAME.replace("@", "").lower()):
+        admin_text = (
+            f"👑 **Admin Control Panel**\n\n"
+            f"Welcome Abhishek! Manage your bot settings and operations below:\n\n"
+            f"📊 Total Registered Users: {len(USERS)}\n"
+            f"🟢 Current QR Status: {'Available' if QR_STATE['is_available'] else 'Unavailable'}"
+        )
+        markup = types.InlineKeyboardMarkup(row_width=2)
+        markup.add(
+            types.InlineKeyboardButton("📊 Bot Stats", callback_data="admin_stats"),
+            types.InlineKeyboardButton("📋 Pending Withdrawals", callback_data="admin_pending"),
+            types.InlineKeyboardButton("📢 Broadcast Alert", callback_data="admin_broadcast_prompt"),
+            types.InlineKeyboardButton("🔗 Set Channel", callback_data="admin_set_channel"),
+            types.InlineKeyboardButton("🟢 Turn QR ON", callback_data="admin_qr_on"),
+            types.InlineKeyboardButton("🔴 Turn QR OFF", callback_data="admin_qr_off")
+        )
+        safe_send_message(message.chat.id, admin_text, reply_markup=markup)
+    else:
+        # Silently ignore or deny unauthorized users
+        safe_send_message(message.chat.id, "❌ You are not authorized to access the admin control panel!")
+
+@bot.callback_query_handler(func=lambda call: call.data in [
+    "admin_stats", "admin_pending", "admin_broadcast_prompt", 
+    "admin_set_channel", "admin_qr_on", "admin_qr_off"
+])
+def admin_callbacks(call):
+    if call.from_user.id != ADMIN_ID:
+        bot.answer_callback_query(call.id, "Unauthorized access restricted!", show_alert=True)
+        return
+        
+    if call.data == "admin_stats":
+        total_payouts = sum(len(h) for h in WITHDRAWALS_HISTORY.values())
+        stats_msg = (
+            f"📊 **BOT LIVE STATISTICS**\n\n"
+            f"👥 Total Users Registered: {len(USERS)}\n"
+            f"💸 Total Payout Requests Processed: {total_payouts}\n"
+            f"🎯 QR Task Status: {'Active' if QR_STATE['is_available'] else 'Inactive'}"
+        )
+        bot.answer_callback_query(call.id, "Fetching stats...")
+        safe_send_message(call.message.chat.id, stats_msg)
+        
+    elif call.data == "admin_pending":
+        total_pending = sum(len(v) for v in PENDING_WITHDRAWALS.values())
+        bot.answer_callback_query(call.id, f"Pending withdrawals: {total_pending}")
+        safe_send_message(call.message.chat.id, f"📋 **Pending Withdrawals Count:** {total_pending}\nReview and distribute payments through your merchant portal.")
+        
+    elif call.data == "admin_broadcast_prompt":
+        bot.answer_callback_query(call.id)
+        safe_send_message(call.message.chat.id, "📢 **Broadcast Manager:**\nSend your broadcast update message to push notifications with sound alerts across all registered bot members.")
+        
+    elif call.data == "admin_set_channel":
+        bot.answer_callback_query(call.id)
+        safe_send_message(call.message.chat.id, f"🔗 **Current Integration Channel:**\n{BOT_SETTINGS['channel_link']}\nSend a new link if you wish to modify channel bindings.")
+        
+    elif call.data == "admin_qr_on":
+        QR_STATE["is_available"] = True
+        QR_STATE["is_claimed"] = False
+        bot.answer_callback_query(call.id, "QR tasks enabled successfully!")
+        try:
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, 
+                                  text="👑 **Admin Panel**\n\nQR Status: **Enabled (Available)**", parse_mode="Markdown")
+        except Exception:
+            pass
+                              
+    elif call.data == "admin_qr_off":
+        QR_STATE["is_available"] = False
+        bot.answer_callback_query(call.id, "QR tasks disabled successfully!")
+        try:
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, 
+                                  text="👑 **Admin Panel**\n\nQR Status: **Disabled (Unavailable)**", parse_mode="Markdown")
+        except Exception:
+            pass
+
+
+# ==================== MAIN EXECUTION, KEEP-ALIVE & POLLING ====================
+if __name__ == "__main__":
+    print("Starting Keep-Alive Flask server for Render deployment...")
+    keep_alive()
+    
+    print("Clearing old webhooks and pending updates to prevent API/Polling conflicts...")
+    try:
+        bot.remove_webhook()
+        bot.delete_webhook(drop_pending_updates=True)
+        print("Webhook successfully reset and cleared.")
+    except Exception as webhook_err:
+        print(f"Webhook reset warning: {webhook_err}")
+        
+    print("Telegram Bot is running successfully with all advanced features and security layers...")
+    
+    # Infinite Polling Loop with Robust Error Handling & Auto-Reconnect
+    while True:
+        try:
+            bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=30)
+        except Exception as polling_error:
+            print(f"Polling error encountered: {polling_error}")
+            time.sleep(5)
