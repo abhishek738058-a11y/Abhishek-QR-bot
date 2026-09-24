@@ -1,10 +1,9 @@
 """
 =============================================================================
-OFFICIAL ADVANCED TELEGRAM EARNING & QR TASK BOT (CLEAN & FINAL EDITION)
+OFFICIAL ADVANCED TELEGRAM EARNING & QR TASK BOT (FINAL CLEAN EDITION)
 Developer / Owner: Abhishek (@abhishek723803)
-Description: Production-ready Telegram bot with dynamic slab rewards, 10% lifetime 
-             referral commission, strict admin screenshot verification, and 
-             zero unwanted forced-join wrappers.
+Description: Telegram bot with direct referral bonus (₹1.00), dynamic slab rewards, 
+             strict admin screenshot verifications, and zero lifetime commissions.
 =============================================================================
 """
 
@@ -22,7 +21,7 @@ from flask import Flask
 TOKEN = "8513419896:AAGjNu8vXEiJCUYjWZPSGtPoW6_0wRuQwpo"
 bot = telebot.TeleBot(TOKEN)
 
-# Administrative Security Constants (Strictly for Abhishek)
+# Administrative Security Constants
 ADMIN_USERNAME = "@abhishek723803"
 ADMIN_ID = 841187478
 
@@ -123,7 +122,7 @@ def safe_send_message(chat_id, text, reply_markup=None, parse_mode="Markdown", s
 
 
 # ============================================================================
-# SECTION 4: /START COMMAND & REFERRAL SYSTEM
+# SECTION 4: /START COMMAND & DIRECT REFERRAL SYSTEM
 # ============================================================================
 
 @bot.message_handler(commands=['start'])
@@ -136,7 +135,7 @@ def send_welcome(message):
 
     user_data = get_user_data(user_id)
     
-    # Process Referral & ₹1.00 Direct Joining Bonus
+    # Process Direct Referral & ₹1.00 Joining Bonus (Lifetime commission removed)
     args = message.text.split()
     if len(args) > 1 and user_data["referred_by"] is None:
         try:
@@ -149,7 +148,7 @@ def send_welcome(message):
                 
                 safe_send_message(
                     referrer_id, 
-                    f"🎉 **New Referral Joined!**\n\nUser ID `{user_id}` joined using your link. ₹1.00 direct bonus added to your wallet!", 
+                    f"🎉 **New Referral Joined!**\n\nUser ID `{user_id}` joined using your link. ₹1.00 direct joining bonus added to your wallet!", 
                     sound_enabled=referrer_data["notifications"]
                 )
         except Exception as ref_err:
@@ -173,7 +172,7 @@ def send_welcome(message):
     welcome_text = (
         f"👋 Welcome, **{message.from_user.first_name}**!\n\n"
         f"🤖 Welcome to our official Automated Earning & QR Task Bot.\n"
-        f"Complete fast scanning tasks, claim rewards through dynamic earning slabs, invite friends for lifetime 10% commission, and withdraw real money instantly!\n\n"
+        f"Complete fast scanning tasks, earn rewards through dynamic earning slabs, invite friends for instant direct bonuses, and withdraw real money securely!\n\n"
         f"👇 Choose any option from the menu below:"
     )
     safe_send_message(message.chat.id, welcome_text, reply_markup=markup, sound_enabled=user_data["notifications"])
@@ -312,7 +311,7 @@ def handle_payment_screenshot(message):
 
 
 # ============================================================================
-# SECTION 7: ADMIN APPROVAL/REJECTION & 10% COMMISSION
+# SECTION 7: ADMIN APPROVAL/REJECTION (NO LIFETIME COMMISSION)
 # ============================================================================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith(("approve_", "reject_")))
@@ -332,25 +331,12 @@ def handle_admin_verification(call):
         current_task_num = user_data["completed_tasks"]
         user_data["balance"] += reward  # Credit base reward only upon admin approval
         
-        # --- 10% LIFETIME REFERRAL COMMISSION ---
-        referrer_id = user_data.get("referred_by")
-        if referrer_id and not is_user_banned(referrer_id):
-            commission = round(reward * 0.10, 2)
-            if commission > 0:
-                referrer_data = get_user_data(referrer_id)
-                referrer_data["balance"] += commission
-                safe_send_message(
-                    referrer_id,
-                    f"🎁 **Lifetime Referral Commission Received!**\n\nAapke referral (ID: `{user_id}`) ne task #{current_task_num} complete kiya hai!\n💰 Uske reward par aapko **10% commission (₹{commission})** mil gaya hai.",
-                    sound_enabled=referrer_data["notifications"]
-                )
-        
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         if user_id not in TASK_HISTORY:
             TASK_HISTORY[user_id] = []
         TASK_HISTORY[user_id].append(f"Task #{current_task_num} - ₹{reward} ({timestamp})")
         
-        bot.answer_callback_query(call.id, f"Approved! ₹{reward} credited & 10% commission distributed.")
+        bot.answer_callback_query(call.id, f"Approved! ₹{reward} credited successfully.")
         
         try:
             bot.edit_message_caption(
@@ -508,10 +494,9 @@ def invite_earn(message):
     ref_link = f"https://t.me/{bot_username}?start={message.from_user.id}"
     
     invite_text = (
-        f"👥 **REFERRAL PROGRAM & LIFETIME COMMISSION**\n\n"
-        f"💰 **BENEFITS:**\n"
-        f"• **Direct Bonus:** Har ek naye referral par turant ₹1.00 joining bonus paayein!\n"
-        f"• **10% Lifetime Commission:** Jab bhi aapka refer kiya hua user koi task complete karega, uski earning ka 10% commission aapko lifetime milta rahega!\n\n"
+        f"👥 **REFERRAL PROGRAM & DIRECT BONUS**\n\n"
+        f"💰 **BENEFIT:**\n"
+        f"• **Direct Joining Bonus:** Har ek naye referral ke join hone par turant ₹1.00 direct bonus paayein!\n\n"
         f"🔗 **Aapka Referral Link:**\n`{ref_link}`"
     )
     safe_send_message(message.chat.id, invite_text, sound_enabled=get_user_data(message.from_user.id)["notifications"])
