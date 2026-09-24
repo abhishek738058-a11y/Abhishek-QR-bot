@@ -1,10 +1,10 @@
 """
 =============================================================================
-OFFICIAL ADVANCED TELEGRAM EARNING & QR TASK BOT (FULL & FINAL EDITION)
+OFFICIAL ADVANCED TELEGRAM EARNING & QR TASK BOT (CLEAN & FINAL EDITION)
 Developer / Owner: Abhishek (@abhishek723803)
-Description: A production-ready, highly robust Telegram bot featuring dynamic 
-             slab-based rewards, 10% lifetime referral commissions, manual admin 
-             screenshot verifications, user ban controls, and Flask keep-alive.
+Description: Production-ready Telegram bot with dynamic slab rewards, 10% lifetime 
+             referral commission, strict admin screenshot verification, and 
+             zero unwanted forced-join wrappers.
 =============================================================================
 """
 
@@ -19,15 +19,14 @@ from flask import Flask
 # SECTION 1: CONFIGURATION & CORE SETUP
 # ============================================================================
 
-# Official Telegram Bot Token provided by BotFather
 TOKEN = "8513419896:AAGjNu8vXEiJCUYjWZPSGtPoW6_0wRuQwpo"
 bot = telebot.TeleBot(TOKEN)
 
-# Administrative Security Constants
+# Administrative Security Constants (Strictly for Abhishek)
 ADMIN_USERNAME = "@abhishek723803"
 ADMIN_ID = 841187478
 
-# Global Bot State Control Dictionaries
+# Global Bot State Dictionaries
 QR_STATE = {
     "is_available": True,   # Controls whether QR tasks are open for users
     "is_claimed": False     # Tracks if current active QR is claimed
@@ -38,7 +37,7 @@ BOT_SETTINGS = {
     "min_withdrawal": 50.0
 }
 
-# In-Memory Database Structures for User Data & Operations
+# In-Memory Database Structures
 USERS = {}
 WITHDRAWALS_HISTORY = {}
 TASK_HISTORY = {}
@@ -47,22 +46,19 @@ PENDING_APPROVALS = {}
 
 
 # ============================================================================
-# SECTION 2: FLASK KEEP-ALIVE SERVER (FOR RENDER / HOSTING DEPLOYMENT)
+# SECTION 2: FLASK KEEP-ALIVE SERVER (RENDER DEPLOYMENT)
 # ============================================================================
 
 app = Flask('')
 
 @app.route('/')
 def home():
-    """Health check route to keep Render deployment active 24/7."""
     return "Telegram Earning & QR Task Bot is running live and operational!"
 
 def run_flask():
-    """Runs the Flask web server on port 8080."""
     app.run(host='0.0.0.0', port=8080)
 
 def keep_alive():
-    """Spawns a background thread for the Flask web server."""
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
@@ -73,10 +69,6 @@ def keep_alive():
 # ============================================================================
 
 def get_user_data(user_id):
-    """
-    Fetches user data dictionary from memory storage. 
-    If the user does not exist, initializes a default structured profile.
-    """
     if user_id not in USERS:
         USERS[user_id] = {
             "balance": 0.0,
@@ -90,9 +82,7 @@ def get_user_data(user_id):
     return USERS[user_id]
 
 def is_user_banned(user_id):
-    """Checks if a specified user has been banned by the administrator."""
-    user_data = get_user_data(user_id)
-    return user_data.get("banned", False)
+    return get_user_data(user_id).get("banned", False)
 
 def get_task_reward(task_number):
     """
@@ -109,7 +99,6 @@ def get_task_reward(task_number):
         return 25.0
 
 def get_current_rate(completed_tasks):
-    """Determines the reward payout rate for the upcoming task."""
     next_task = completed_tasks + 1
     if next_task <= 10:
         return 15.0
@@ -119,7 +108,6 @@ def get_current_rate(completed_tasks):
         return 25.0
 
 def safe_send_message(chat_id, text, reply_markup=None, parse_mode="Markdown", sound_enabled=True):
-    """Wrapper function to send messages safely with error handling and sound toggles."""
     try:
         return bot.send_message(
             chat_id, 
@@ -130,29 +118,25 @@ def safe_send_message(chat_id, text, reply_markup=None, parse_mode="Markdown", s
             disable_web_page_preview=True
         )
     except Exception as error_msg:
-        print(f"Exception occurred while sending message to chat {chat_id}: {error_msg}")
+        print(f"Error sending message to {chat_id}: {error_msg}")
         return None
 
 
 # ============================================================================
-# SECTION 4: /START COMMAND & REFERRAL SYSTEM HANDLER
+# SECTION 4: /START COMMAND & REFERRAL SYSTEM
 # ============================================================================
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_id = message.from_user.id
     
-    # Security check for banned users
     if is_user_banned(user_id):
-        safe_send_message(
-            message.chat.id, 
-            "❌ **Access Denied:** Aapko admin dwara is bot se ban kar diya gaya hai."
-        )
+        safe_send_message(message.chat.id, "❌ **Access Denied:** Aapko admin dwara is bot se ban kar diya gaya hai.")
         return
 
     user_data = get_user_data(user_id)
     
-    # Process Referral Parameters & Direct Joining Bonus
+    # Process Referral & ₹1.00 Direct Joining Bonus
     args = message.text.split()
     if len(args) > 1 and user_data["referred_by"] is None:
         try:
@@ -169,31 +153,28 @@ def send_welcome(message):
                     sound_enabled=referrer_data["notifications"]
                 )
         except Exception as ref_err:
-            print(f"Referral parsing exception: {ref_err}")
+            print(f"Referral error: {ref_err}")
 
-    # Constructing the 10 Main Menu Buttons Layout (Reply Keyboard)
+    # 10 Main Menu Buttons Layout (Reply Keyboard)
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    btn_qr = types.KeyboardButton("🎯 GET QR")
-    btn_balance = types.KeyboardButton("💰 My Balance")
-    btn_account = types.KeyboardButton("👤 My Account")
-    btn_withdraw = types.KeyboardButton("💸 Withdraw Money")
-    btn_history = types.KeyboardButton("📜 Withdrawal History")
-    btn_invite = types.KeyboardButton("👥 Invite & Earn")
-    btn_task_hist = types.KeyboardButton("📋 Task History")
-    btn_toggle = types.KeyboardButton("🔔 Toggle Notification")
-    btn_support = types.KeyboardButton("🛠 Support")
-    btn_admin = types.KeyboardButton("👑 Admin Panel")
-    
     markup.add(
-        btn_qr, btn_balance, btn_account, btn_withdraw, btn_history, 
-        btn_invite, btn_task_hist, btn_toggle, btn_support, btn_admin
+        types.KeyboardButton("🎯 GET QR"),
+        types.KeyboardButton("💰 My Balance"),
+        types.KeyboardButton("👤 My Account"),
+        types.KeyboardButton("💸 Withdraw Money"),
+        types.KeyboardButton("📜 Withdrawal History"),
+        types.KeyboardButton("👥 Invite & Earn"),
+        types.KeyboardButton("📋 Task History"),
+        types.KeyboardButton("🔔 Toggle Notification"),
+        types.KeyboardButton("🛠 Support"),
+        types.KeyboardButton("👑 Admin Panel")
     )
     
     welcome_text = (
         f"👋 Welcome, **{message.from_user.first_name}**!\n\n"
         f"🤖 Welcome to our official Automated Earning & QR Task Bot.\n"
         f"Complete fast scanning tasks, claim rewards through dynamic earning slabs, invite friends for lifetime 10% commission, and withdraw real money instantly!\n\n"
-        f"👇 Choose any option from the menu below to get started:"
+        f"👇 Choose any option from the menu below:"
     )
     safe_send_message(message.chat.id, welcome_text, reply_markup=markup, sound_enabled=user_data["notifications"])
 
@@ -211,7 +192,6 @@ def handle_get_qr(message):
 
     user_data = get_user_data(user_id)
     
-    # Conditional check: If QR is disabled by admin
     if not QR_STATE["is_available"]:
         no_qr_text = (
             "❌ **QR Available Nahi Hai!**\n\n"
@@ -230,8 +210,6 @@ def handle_get_qr(message):
         
     else:
         current_reward = get_current_rate(user_data["completed_tasks"])
-        
-        # Long detailed previous GET QR message requested by user
         qr_text = (
             f"🎯 **QR TASK & CLAIM ZONE** 🎯\n\n"
             f"🎁 **Reward:** ₹{current_reward}\n\n"
@@ -253,7 +231,7 @@ def handle_get_qr(message):
 
 
 # ============================================================================
-# SECTION 6: MAKE PAYMENT CALLBACK & PROOF SUBMISSION HANDLERS
+# SECTION 6: PAYMENT & SCREENSHOT SUBMISSION
 # ============================================================================
 
 @bot.callback_query_handler(func=lambda call: call.data == "make_payment_action")
@@ -334,7 +312,7 @@ def handle_payment_screenshot(message):
 
 
 # ============================================================================
-# SECTION 7: ADMIN APPROVAL/REJECTION WITH 10% LIFETIME COMMISSION
+# SECTION 7: ADMIN APPROVAL/REJECTION & 10% COMMISSION
 # ============================================================================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith(("approve_", "reject_")))
@@ -352,12 +330,12 @@ def handle_admin_verification(call):
         reward = float(data_parts[2])
         user_data["completed_tasks"] += 1
         current_task_num = user_data["completed_tasks"]
-        user_data["balance"] += reward  # Credit base reward to user
+        user_data["balance"] += reward  # Credit base reward only upon admin approval
         
-        # --- 10% LIFETIME REFERRAL COMMISSION DISTRIBUTION ---
+        # --- 10% LIFETIME REFERRAL COMMISSION ---
         referrer_id = user_data.get("referred_by")
         if referrer_id and not is_user_banned(referrer_id):
-            commission = round(reward * 0.10, 2)  # 10% commission calculation
+            commission = round(reward * 0.10, 2)
             if commission > 0:
                 referrer_data = get_user_data(referrer_id)
                 referrer_data["balance"] += commission
@@ -366,7 +344,6 @@ def handle_admin_verification(call):
                     f"🎁 **Lifetime Referral Commission Received!**\n\nAapke referral (ID: `{user_id}`) ne task #{current_task_num} complete kiya hai!\n💰 Uske reward par aapko **10% commission (₹{commission})** mil gaya hai.",
                     sound_enabled=referrer_data["notifications"]
                 )
-        # ----------------------------------------------------
         
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         if user_id not in TASK_HISTORY:
@@ -414,7 +391,7 @@ def handle_admin_verification(call):
 
 
 # ============================================================================
-# SECTION 8: STANDARD BOT MENU SECTIONS (WALLET, ACCOUNT, WITHDRAWAL, ETC.)
+# SECTION 8: REMAINING 9 MENU BUTTON HANDLERS
 # ============================================================================
 
 @bot.message_handler(func=lambda message: message.text == "💰 My Balance")
@@ -430,8 +407,8 @@ def my_balance(message):
         f"🏧 Minimum Withdrawal: ₹{BOT_SETTINGS['min_withdrawal']}\n\n"
         f"📊 **Dynamic Slab Reward Structure:**\n"
         f"• 1 to 10 QRs: ₹15 per QR\n"
-        f"• 10 to 20 QRs: ₹20 per QR\n"
-        f"• 20 to 30 QRs & above: ₹25 per QR"
+        f"• 11 to 20 QRs: ₹20 per QR\n"
+        f"• 21 to 30+ QRs: ₹25 per QR"
     )
     safe_send_message(message.chat.id, balance_content, sound_enabled=user_data["notifications"])
 
@@ -442,7 +419,6 @@ def my_account(message):
     user_id = message.from_user.id
     user_data = get_user_data(user_id)
     
-    # Custom Account profile displaying Name, Username, and User ID as requested
     account_info = (
         f"👤 **YOUR ACCOUNT PROFILE**\n\n"
         f"📌 **Name:** {message.from_user.first_name}\n"
@@ -579,7 +555,7 @@ def support(message):
 
 
 # ============================================================================
-# SECTION 9: ADVANCED ADMIN PANEL WITH USER CONTROL (BAN/UNBAN)
+# SECTION 9: EXCLUSIVE ADMIN PANEL & BAN/UNBAN COMMANDS
 # ============================================================================
 
 @bot.message_handler(func=lambda message: message.text == "👑 Admin Panel")
