@@ -5,8 +5,11 @@ from flask import Flask
 import telebot
 from telebot import types
 
-# Aapka Bot Token aur Channel Settings
-TOKEN = '8513419896:AAEoqPXVd0aRSHSHpMIdo3VLELoaEFO5Wj4'
+# ---------------------------------------------------------
+# AAPKA NAYA TELEGRAM BOT TOKEN 
+# ---------------------------------------------------------
+TOKEN = '8513419896:AAGvyq8WS8AJbi77QW5gRN99QoiNU0JZR08'
+
 CHANNEL_LINK = 'https://t.me/+757WqqqLLoo4Yjhl'
 MIN_WITHDRAWAL = 50.0  # Minimum withdrawal limit set to 50
 CURRENT_PAYOUT = 15.0
@@ -126,7 +129,6 @@ def verify_join(call):
 
   bot.answer_callback_query(call.id, 'Channel verification successful!')
 
-  # All 10 Reply/Menu Buttons Added Here
   markup = types.InlineKeyboardMarkup(row_width=2)
   btn_qr = types.InlineKeyboardButton('🎯 GET QR', callback_data='get_qr')
   btn_bal = types.InlineKeyboardButton(
@@ -388,10 +390,9 @@ def handle_admin_panel(call):
 
   admin_msg = (
       f'🛠️ Admin Control & User Management Panel\n\nWelcome Abhishek! Total'
-      ' Registered Users:'
-      f' {total_users}\n\nQR Status: Inactive (Unavailable)\nQR Image Set:'
-      ' ❌\n\n👉 Neeche buttons se QR ON/OFF karein ya Commands use'
-      ' karein:\n/ban <USER_ID>\n/unban <USER_ID>'
+      f' Registered Users: {total_users}\n\nQR Status: Inactive'
+      ' (Unavailable)\nQR Image Set: ❌\n\n👉 Neeche buttons se QR ON/OFF'
+      ' karein ya Commands use karein:\n/ban <USER_ID>\n/unban <USER_ID>'
   )
 
   markup = types.InlineKeyboardMarkup(row_width=2)
@@ -473,7 +474,6 @@ def unban_user(message):
 
 
 if __name__ == '__main__':
-  # Run Flask server in a separate thread for Render port binding
   flask_thread = threading.Thread(target=run_flask)
   flask_thread.daemon = True
   flask_thread.start()
