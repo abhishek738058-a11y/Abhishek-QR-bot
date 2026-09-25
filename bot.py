@@ -6,7 +6,7 @@ import telebot
 from telebot import types
 
 # ---------------------------------------------------------
-# AAPKA NAYA TELEGRAM BOT TOKEN 
+# AAPKA TELEGRAM BOT TOKEN 
 # ---------------------------------------------------------
 TOKEN = '8513419896:AAGvyq8WS8AJbi77QW5gRN99QoiNU0JZR08'
 
@@ -99,7 +99,7 @@ def send_welcome(message):
   conn.commit()
   conn.close()
 
-  # Force Join Markup with User's Channel Link only
+  # Force Join Markup (yeh inline hi rahega channel join verify karne ke liye)
   markup = types.InlineKeyboardMarkup()
   markup.add(
       types.InlineKeyboardButton(
@@ -121,7 +121,7 @@ def send_welcome(message):
   bot.send_message(message.chat.id, welcome_text, reply_markup=markup)
 
 
-# --- VERIFY JOIN & MAIN MENU ---
+# --- VERIFY JOIN & MESSAGE BAR REPLY KEYBOARD MENU ---
 @bot.callback_query_handler(func=lambda call: call.data == 'check_join')
 def verify_join(call):
   user_id = call.from_user.id
@@ -129,33 +129,18 @@ def verify_join(call):
 
   bot.answer_callback_query(call.id, 'Channel verification successful!')
 
-  markup = types.InlineKeyboardMarkup(row_width=2)
-  btn_qr = types.InlineKeyboardButton('🎯 GET QR', callback_data='get_qr')
-  btn_bal = types.InlineKeyboardButton(
-      '💰 My Balance', callback_data='my_balance'
-  )
-  btn_acc = types.InlineKeyboardButton(
-      '👤 My Account', callback_data='my_account'
-  )
-  btn_wd = types.InlineKeyboardButton(
-      '💳 Withdraw Money', callback_data='withdraw_money'
-  )
-  btn_hist = types.InlineKeyboardButton(
-      '📜 Withdrawal History', callback_data='withdrawal_history'
-  )
-  btn_ref = types.InlineKeyboardButton(
-      '👥 Invite & Earn', callback_data='invite_earn'
-  )
-  btn_task = types.InlineKeyboardButton(
-      '📋 Task History', callback_data='task_history'
-  )
-  btn_notif = types.InlineKeyboardButton(
-      '🔔 Toggle Notification', callback_data='toggle_notif'
-  )
-  btn_sup = types.InlineKeyboardButton('🎧 Support', callback_data='support')
-  btn_admin = types.InlineKeyboardButton(
-      '🛠️ Admin Panel', callback_data='admin_panel'
-  )
+  # Menu Builder style Reply Keyboard (Message Bar Buttons)
+  markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+  btn_qr = types.KeyboardButton('🎯 GET QR')
+  btn_bal = types.KeyboardButton('💰 My Balance')
+  btn_acc = types.KeyboardButton('👤 My Account')
+  btn_wd = types.KeyboardButton('💳 Withdraw Money')
+  btn_hist = types.KeyboardButton('📜 Withdrawal History')
+  btn_ref = types.KeyboardButton('👥 Invite & Earn')
+  btn_task = types.KeyboardButton('📋 Task History')
+  btn_notif = types.KeyboardButton('🔔 Toggle Notification')
+  btn_sup = types.KeyboardButton('🎧 Support')
+  btn_admin = types.KeyboardButton('🛠️ Admin Panel')
 
   markup.add(
       btn_qr,
@@ -174,29 +159,28 @@ def verify_join(call):
       f'✨ Welcome, {user_name} to ABHISHEKQRBOT! ✨\n\n🚀 Aapka swagat hai'
       ' hamare official Automated Earning & QR Task Bot mein.\nYahan aap fast'
       ' scanning tasks complete karke, rewards earn kar sakte hain aur dosto'
-      ' ko invite karke direct bonus pa sakte hain.\n\n👇 Neeche menu se koi'
-      ' bhi option chunein:'
+      ' ko invite karke direct bonus pa sakte hain.\n\n👇 Neeche message bar'
+      ' mein diye gaye menu se koi bhi option chunein:'
   )
   bot.send_message(call.message.chat.id, main_menu_text, reply_markup=markup)
 
 
-# --- GET QR HANDLER ---
-@bot.callback_query_handler(func=lambda call: call.data == 'get_qr')
-def handle_get_qr(call):
+# --- GET QR HANDLER (Message Bar Button) ---
+@bot.message_handler(func=lambda message: message.text == '🎯 GET QR')
+def handle_get_qr(message):
   error_msg = (
       '⚠️ System Notice:\n\n❌ QR is not available right now.\nWe are currently'
       ' updating our scanning servers for improved performance and security.'
       ' Please try again after some time.\n\n(असुविधा के लिए खेद है, अभी QR'
       ' उपलब्ध नहीं है। कृपया थोड़ी देर के बाद पुनः प्रयास करें।)'
   )
-  bot.answer_callback_query(call.id)
-  bot.send_message(call.message.chat.id, error_msg)
+  bot.send_message(message.chat.id, error_msg)
 
 
-# --- MY BALANCE HANDLER ---
-@bot.callback_query_handler(func=lambda call: call.data == 'my_balance')
-def handle_balance(call):
-  user_id = call.from_user.id
+# --- MY BALANCE HANDLER (Message Bar Button) ---
+@bot.message_handler(func=lambda message: message.text == '💰 My Balance')
+def handle_balance(message):
+  user_id = message.from_user.id
   conn = get_db_connection()
   cursor = conn.cursor()
   cursor.execute(
@@ -218,14 +202,13 @@ def handle_balance(call):
       f' ₹{MIN_WITHDRAWAL}\n\n📊 Dynamic Slab Reward Structure:\n▫️ 1 to 10 QRs:'
       ' ₹15 per QR\n▫️ 11 to 20 QRs: ₹20 per QR\n▫️ 21 to 30+ QRs: ₹25 per QR'
   )
-  bot.answer_callback_query(call.id)
-  bot.send_message(call.message.chat.id, msg)
+  bot.send_message(message.chat.id, msg)
 
 
-# --- MY ACCOUNT HANDLER ---
-@bot.callback_query_handler(func=lambda call: call.data == 'my_account')
-def handle_account(call):
-  user_id = call.from_user.id
+# --- MY ACCOUNT HANDLER (Message Bar Button) ---
+@bot.message_handler(func=lambda message: message.text == '👤 My Account')
+def handle_account(message):
+  user_id = message.from_user.id
   conn = get_db_connection()
   cursor = conn.cursor()
   cursor.execute(
@@ -249,14 +232,13 @@ def handle_account(call):
         f' Referrals: {referrals} Users\n🔔 Sound Notification:'
         f' {notif_status}\n📅 Joined On: {joined_date}'
     )
-    bot.answer_callback_query(call.id)
-    bot.send_message(call.message.chat.id, msg)
+    bot.send_message(message.chat.id, msg)
 
 
-# --- WITHDRAW MONEY HANDLER ---
-@bot.callback_query_handler(func=lambda call: call.data == 'withdraw_money')
-def handle_withdraw(call):
-  user_id = call.from_user.id
+# --- WITHDRAW MONEY HANDLER (Message Bar Button) ---
+@bot.message_handler(func=lambda message: message.text == '💳 Withdraw Money')
+def handle_withdraw(message):
+  user_id = message.from_user.id
   conn = get_db_connection()
   cursor = conn.cursor()
   cursor.execute('SELECT balance FROM users WHERE user_id = ?', (user_id,))
@@ -270,23 +252,21 @@ def handle_withdraw(call):
         f'❌ Insufficient Balance.\n\nAapka current balance ₹{balance}'
         f' hai.\nMinimum withdrawal limit ₹{MIN_WITHDRAWAL} honi chahiye.'
     )
-    bot.answer_callback_query(call.id)
-    bot.send_message(call.message.chat.id, msg)
+    bot.send_message(message.chat.id, msg)
   else:
-    bot.answer_callback_query(call.id)
     bot.send_message(
-        call.message.chat.id,
+        message.chat.id,
         '✅ Your balance is eligible for withdrawal. Please enter your UPI ID'
         ' to proceed.',
     )
 
 
-# --- WITHDRAWAL HISTORY HANDLER ---
-@bot.callback_query_handler(
-    func=lambda call: call.data == 'withdrawal_history'
+# --- WITHDRAWAL HISTORY HANDLER (Message Bar Button) ---
+@bot.message_handler(
+    func=lambda message: message.text == '📜 Withdrawal History'
 )
-def handle_withdrawal_history(call):
-  user_id = call.from_user.id
+def handle_withdrawal_history(message):
+  user_id = message.from_user.id
   conn = get_db_connection()
   cursor = conn.cursor()
   cursor.execute(
@@ -305,14 +285,13 @@ def handle_withdrawal_history(call):
           f'{idx}. Amount: ₹{rec[0]} | Status: {rec[1]} | Time: {rec[2]}\n'
       )
 
-  bot.answer_callback_query(call.id)
-  bot.send_message(call.message.chat.id, msg)
+  bot.send_message(message.chat.id, msg)
 
 
-# --- INVITE & EARN HANDLER ---
-@bot.callback_query_handler(func=lambda call: call.data == 'invite_earn')
-def handle_invite(call):
-  user_id = call.from_user.id
+# --- INVITE & EARN HANDLER (Message Bar Button) ---
+@bot.message_handler(func=lambda message: message.text == '👥 Invite & Earn')
+def handle_invite(message):
+  user_id = message.from_user.id
   bot_info = bot.get_me()
   bot_username = bot_info.username
   ref_link = f'https://t.me/{bot_username}?start={user_id}'
@@ -322,24 +301,24 @@ def handle_invite(call):
       ' Bonus: Har ek nayi referral ke join hone par turant ₹1.00 direct bonus'
       f' paayein!\n\n🔗 Aapka Referral Link:\n{ref_link}'
   )
-  bot.answer_callback_query(call.id)
-  bot.send_message(call.message.chat.id, msg)
+  bot.send_message(message.chat.id, msg)
 
 
-# --- TASK HISTORY HANDLER ---
-@bot.callback_query_handler(func=lambda call: call.data == 'task_history')
-def handle_task_history(call):
-  bot.answer_callback_query(call.id)
+# --- TASK HISTORY HANDLER (Message Bar Button) ---
+@bot.message_handler(func=lambda message: message.text == '📋 Task History')
+def handle_task_history(message):
   bot.send_message(
-      call.message.chat.id,
+      message.chat.id,
       '📋 TASK HISTORY\n\nAbhi tak koi bhi completed task nahi hai.',
   )
 
 
-# --- TOGGLE NOTIFICATION HANDLER ---
-@bot.callback_query_handler(func=lambda call: call.data == 'toggle_notif')
-def handle_toggle_notif(call):
-  user_id = call.from_user.id
+# --- TOGGLE NOTIFICATION HANDLER (Message Bar Button) ---
+@bot.message_handler(
+    func=lambda message: message.text == '🔔 Toggle Notification'
+)
+def handle_toggle_notif(message):
+  user_id = message.from_user.id
   conn = get_db_connection()
   cursor = conn.cursor()
   cursor.execute('SELECT notification FROM users WHERE user_id = ?', (user_id,))
@@ -356,30 +335,28 @@ def handle_toggle_notif(call):
     status_text = 'Disabled 🔴'
   conn.close()
 
-  bot.answer_callback_query(call.id, 'Notification status updated.')
   bot.send_message(
-      call.message.chat.id, f'🔔 Notification Settings\n\nStatus: {status_text}'
+      message.chat.id, f'🔔 Notification Settings\n\nStatus: {status_text}'
   )
 
 
-# --- SUPPORT HANDLER ---
-@bot.callback_query_handler(func=lambda call: call.data == 'support')
-def handle_support(call):
-  bot.answer_callback_query(call.id)
+# --- SUPPORT HANDLER (Message Bar Button) ---
+@bot.message_handler(func=lambda message: message.text == '🎧 Support')
+def handle_support(message):
   msg = (
       '🎧 CUSTOMER SUPPORT DESK\n\n👑 Owner Username:'
       ' @abhishek723803\n⏰ Timing: 10:00 AM - 10:00 PM\n\nPayment ya withdrawal'
       ' mein koi bhi problem ho toh admin se contact karein.'
   )
-  bot.send_message(call.message.chat.id, msg)
+  bot.send_message(message.chat.id, msg)
 
 
-# --- ADMIN PANEL HANDLER ---
-@bot.callback_query_handler(func=lambda call: call.data == 'admin_panel')
-def handle_admin_panel(call):
-  user_id = call.from_user.id
+# --- ADMIN PANEL HANDLER (Message Bar Button) ---
+@bot.message_handler(func=lambda message: message.text == '🛠️ Admin Panel')
+def handle_admin_panel(message):
+  user_id = message.from_user.id
   if user_id != ADMIN_TELEGRAM_ID:
-    bot.answer_callback_query(call.id, 'Access Denied! Admins only.')
+    bot.send_message(message.chat.id, 'Access Denied! Admins only.')
     return
 
   conn = get_db_connection()
@@ -409,8 +386,7 @@ def handle_admin_panel(call):
       types.InlineKeyboardButton('🔴 Turn QR OFF', callback_data='qr_off'),
   )
 
-  bot.answer_callback_query(call.id)
-  bot.send_message(call.message.chat.id, admin_msg, reply_markup=markup)
+  bot.send_message(message.chat.id, admin_msg, reply_markup=markup)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'admin_stats')
@@ -480,3 +456,6 @@ if __name__ == '__main__':
 
   print('Bot and Flask web server are running successfully...')
   bot.infinity_polling(skip_pending=True)
+  
+
+  
