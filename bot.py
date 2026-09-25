@@ -24,13 +24,13 @@ def home():
 
 
 def run_flask():
-  port = int(os.environ.get('PORT', 8080))
+  port = int(os.environ.get('PORT', 10000))
   app.run(host='0.0.0.0', port=port)
 
 
 # --- DATABASE SETUP ---
 def init_db():
-  conn = sqlite3.connect('bot_database.db', check_same_thread=False)
+  conn = sqlite3.connect('bot_database.db', timeout=30, check_same_thread=False)
   cursor = conn.cursor()
   cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
@@ -63,7 +63,7 @@ init_db()
 
 
 def get_db_connection():
-  return sqlite3.connect('bot_database.db', check_same_thread=False)
+  return sqlite3.connect('bot_database.db', timeout=30, check_same_thread=False)
 
 
 # --- START COMMAND & FORCE JOIN ---
@@ -85,19 +85,18 @@ def send_welcome(message):
     conn.close()
     return
 
-  if not row:
-    import datetime
+  import datetime
 
-    joined_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    cursor.execute(
-        'INSERT INTO users (user_id, username, full_name, joined_date) VALUES'
-        ' (?, ?, ?, ?)',
-        (user_id, username, full_name, joined_date),
-    )
-    conn.commit()
+  joined_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+  cursor.execute(
+      'INSERT OR IGNORE INTO users (user_id, username, full_name, joined_date)'
+      ' VALUES (?, ?, ?, ?)',
+      (user_id, username, full_name, joined_date),
+  )
+  conn.commit()
   conn.close()
 
-  # Force Join Markup with User's Channel Link only (A-Tools X removed completely)
+  # Force Join Markup with User's Channel Link only
   markup = types.InlineKeyboardMarkup()
   markup.add(
       types.InlineKeyboardButton(
@@ -111,15 +110,12 @@ def send_welcome(message):
   )
 
   welcome_text = (
-      f'⚠️ **Channel Join Required!**\n\nWelcome to ABHISHEKQRBOT 🤖\nBot ko'
-      f' use karne ke liye sabse pehle hamara official update channel join'
-      f' karna zaroori hai.\n\n👉 Neeche diye gaye button par click karke'
-      f' channel join karein aur phir **Joined & Start Bot** par click'
-      f' karein:'
+      '⚠️ Channel Join Required!\n\nWelcome to ABHISHEKQRBOT 🤖\nBot ko use'
+      ' karne ke liye sabse pehle hamara official update channel join karna'
+      ' zaroori hai.\n\n👉 Neeche diye gaye button par click karke channel join'
+      " karein aur phir 'Joined & Start Bot' par click karein:"
   )
-  bot.send_message(
-      message.chat.id, welcome_text, reply_markup=markup, parse_mode='Markdown'
-  )
+  bot.send_message(message.chat.id, welcome_text, reply_markup=markup)
 
 
 # --- VERIFY JOIN & MAIN MENU ---
@@ -173,32 +169,26 @@ def verify_join(call):
   )
 
   main_menu_text = (
-      f'✨ **Welcome, {user_name} to ABHISHEKQRBOT!** ✨\n\n🚀 Aapka swagat hai'
-      f' hamare official Automated Earning & QR Task Bot mein.\nYahan aap fast'
-      f' scanning tasks complete karke, rewards earn kar sakte hain aur dosto'
-      f' ko invite karke direct bonus pa sakte hain.\n\n👇 Neeche menu se koi'
-      f' bhi option chunein:'
+      f'✨ Welcome, {user_name} to ABHISHEKQRBOT! ✨\n\n🚀 Aapka swagat hai'
+      ' hamare official Automated Earning & QR Task Bot mein.\nYahan aap fast'
+      ' scanning tasks complete karke, rewards earn kar sakte hain aur dosto'
+      ' ko invite karke direct bonus pa sakte hain.\n\n👇 Neeche menu se koi'
+      ' bhi option chunein:'
   )
-  bot.send_message(
-      call.message.chat.id,
-      main_menu_text,
-      reply_markup=markup,
-      parse_mode='Markdown',
-  )
+  bot.send_message(call.message.chat.id, main_menu_text, reply_markup=markup)
 
 
-# --- GET QR HANDLER (Professional Message & Cleaned Links) ---
+# --- GET QR HANDLER ---
 @bot.callback_query_handler(func=lambda call: call.data == 'get_qr')
 def handle_get_qr(call):
   error_msg = (
-      '⚠️ **System Notice:**\n\n❌ **QR is not available right now.**\nWe are'
-      ' currently updating our scanning servers for improved performance and'
-      ' security. Please try again after some time.\n\n*(असुविधा के लिए खेद'
-      ' है, अभी QR उपलब्ध नहीं है। कृपया थोड़ी देर के बाद पुनः प्रयास'
-      ' करें।)*'
+      '⚠️ System Notice:\n\n❌ QR is not available right now.\nWe are currently'
+      ' updating our scanning servers for improved performance and security.'
+      ' Please try again after some time.\n\n(असुविधा के लिए खेद है, अभी QR'
+      ' उपलब्ध नहीं है। कृपया थोड़ी देर के बाद पुनः प्रयास करें।)'
   )
   bot.answer_callback_query(call.id)
-  bot.send_message(call.message.chat.id, error_msg, parse_mode='Markdown')
+  bot.send_message(call.message.chat.id, error_msg)
 
 
 # --- MY BALANCE HANDLER ---
@@ -220,14 +210,14 @@ def handle_balance(call):
   active_reward = row[2] if row else 15.0
 
   msg = (
-      f'💰 **YOUR WALLET & EARNING TIERS**\n\n💵 Available Balance: ₹{balance}\n📌'
-      f' Current Payout Rate: ₹{active_reward} / QR\n✅ Completed Approved'
-      f' Tasks: {completed_qr}\n🔻 **Minimum Withdrawal: ₹{MIN_WITHDRAWAL}**\n\n📊'
-      f' **Dynamic Slab Reward Structure:**\n▫️ 1 to 10 QRs: ₹15 per'
-      f' QR\n▫️ 11 to 20 QRs: ₹20 per QR\n▫️ 21 to 30+ QRs: ₹25 per QR'
+      f'💰 YOUR WALLET & EARNING TIERS\n\n💵 Available Balance:'
+      f' ₹{balance}\n📌 Current Payout Rate: ₹{active_reward} / QR\n✅ Completed'
+      f' Approved Tasks: {completed_qr}\n🔻 Minimum Withdrawal:'
+      f' ₹{MIN_WITHDRAWAL}\n\n📊 Dynamic Slab Reward Structure:\n▫️ 1 to 10 QRs:'
+      ' ₹15 per QR\n▫️ 11 to 20 QRs: ₹20 per QR\n▫️ 21 to 30+ QRs: ₹25 per QR'
   )
   bot.answer_callback_query(call.id)
-  bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
+  bot.send_message(call.message.chat.id, msg)
 
 
 # --- MY ACCOUNT HANDLER ---
@@ -250,7 +240,7 @@ def handle_account(call):
     )
     notif_status = 'ON 🟢' if notif == 1 else 'OFF 🔴'
     msg = (
-        f'👤 **YOUR ACCOUNT PROFILE**\n\n👤 Name: {fname}\n🏷️ Username: @'
+        f'👤 YOUR ACCOUNT PROFILE\n\n👤 Name: {fname}\n🏷️ Username: @'
         f'{uname if uname != "None" else "Not Set"}\n🆔 Telegram ID:'
         f' {user_id}\n\n💳 Wallet Balance: ₹{balance}\n🎯 Completed QRs:'
         f' {completed_qr}\n⭐ Active Reward Rate: ₹{active_reward}\n👥 Total'
@@ -258,10 +248,10 @@ def handle_account(call):
         f' {notif_status}\n📅 Joined On: {joined_date}'
     )
     bot.answer_callback_query(call.id)
-    bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
+    bot.send_message(call.message.chat.id, msg)
 
 
-# --- WITHDRAW MONEY HANDLER (Min Limit 50) ---
+# --- WITHDRAW MONEY HANDLER ---
 @bot.callback_query_handler(func=lambda call: call.data == 'withdraw_money')
 def handle_withdraw(call):
   user_id = call.from_user.id
@@ -275,19 +265,17 @@ def handle_withdraw(call):
 
   if balance < MIN_WITHDRAWAL:
     msg = (
-        f'❌ **Insufficient Balance.**\n\nAapka current balance ₹{balance}'
-        f' hai.\nMinimum withdrawal limit **₹{MIN_WITHDRAWAL}** honi'
-        f' chahiye.'
+        f'❌ Insufficient Balance.\n\nAapka current balance ₹{balance}'
+        f' hai.\nMinimum withdrawal limit ₹{MIN_WITHDRAWAL} honi chahiye.'
     )
     bot.answer_callback_query(call.id)
-    bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
+    bot.send_message(call.message.chat.id, msg)
   else:
     bot.answer_callback_query(call.id)
     bot.send_message(
         call.message.chat.id,
         '✅ Your balance is eligible for withdrawal. Please enter your UPI ID'
         ' to proceed.',
-        parse_mode='Markdown',
     )
 
 
@@ -306,7 +294,7 @@ def handle_withdrawal_history(call):
   records = cursor.fetchall()
   conn.close()
 
-  msg = f'📜 **WITHDRAWAL HISTORY**\n\n🆔 Telegram ID: {user_id}\n\n'
+  msg = f'📜 WITHDRAWAL HISTORY\n\n🆔 Telegram ID: {user_id}\n\n'
   if not records:
     msg += 'Koi bhi withdrawal transaction record nahi mila.'
   else:
@@ -316,7 +304,7 @@ def handle_withdrawal_history(call):
       )
 
   bot.answer_callback_query(call.id)
-  bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
+  bot.send_message(call.message.chat.id, msg)
 
 
 # --- INVITE & EARN HANDLER ---
@@ -328,13 +316,12 @@ def handle_invite(call):
   ref_link = f'https://t.me/{bot_username}?start={user_id}'
 
   msg = (
-      '👥 **REFERRAL PROGRAM & DIRECT BONUS**\n\n🎁 **BENEFIT:**\n• Direct'
-      ' Joining Bonus: Har ek nayi referral ke join hone par turant ₹1.00'
-      ' direct bonus paayein!\n\n🔗 **Aapka Referral Link:**\n'
-      f'{ref_link}'
+      '👥 REFERRAL PROGRAM & DIRECT BONUS\n\n🎁 BENEFIT:\n• Direct Joining'
+      ' Bonus: Har ek nayi referral ke join hone par turant ₹1.00 direct bonus'
+      f' paayein!\n\n🔗 Aapka Referral Link:\n{ref_link}'
   )
   bot.answer_callback_query(call.id)
-  bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
+  bot.send_message(call.message.chat.id, msg)
 
 
 # --- TASK HISTORY HANDLER ---
@@ -343,8 +330,7 @@ def handle_task_history(call):
   bot.answer_callback_query(call.id)
   bot.send_message(
       call.message.chat.id,
-      '📋 **TASK HISTORY**\n\nAbhi tak koi bhi completed task nahi hai.',
-      parse_mode='Markdown',
+      '📋 TASK HISTORY\n\nAbhi tak koi bhi completed task nahi hai.',
   )
 
 
@@ -370,9 +356,7 @@ def handle_toggle_notif(call):
 
   bot.answer_callback_query(call.id, 'Notification status updated.')
   bot.send_message(
-      call.message.chat.id,
-      f'🔔 **Notification Settings**\n\nStatus: {status_text}',
-      parse_mode='Markdown',
+      call.message.chat.id, f'🔔 Notification Settings\n\nStatus: {status_text}'
   )
 
 
@@ -381,11 +365,11 @@ def handle_toggle_notif(call):
 def handle_support(call):
   bot.answer_callback_query(call.id)
   msg = (
-      '🎧 **CUSTOMER SUPPORT DESK**\n\n👑 Owner Username:'
+      '🎧 CUSTOMER SUPPORT DESK\n\n👑 Owner Username:'
       ' @abhishek723803\n⏰ Timing: 10:00 AM - 10:00 PM\n\nPayment ya withdrawal'
       ' mein koi bhi problem ho toh admin se contact karein.'
   )
-  bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
+  bot.send_message(call.message.chat.id, msg)
 
 
 # --- ADMIN PANEL HANDLER ---
@@ -403,10 +387,11 @@ def handle_admin_panel(call):
   conn.close()
 
   admin_msg = (
-      f'🛠️ **Admin Control & User Management Panel**\n\nWelcome Abhishek! Total'
-      f' Registered Users: {total_users}\n\nQR Status: Inactive'
-      f' (Unavailable)\nQR Image Set: ❌\n\n👉 Neeche buttons se QR ON/OFF'
-      f' karein ya Commands use karein:\n/ban <USER_ID>\n/unban <USER_ID>'
+      f'🛠️ Admin Control & User Management Panel\n\nWelcome Abhishek! Total'
+      ' Registered Users:'
+      f' {total_users}\n\nQR Status: Inactive (Unavailable)\nQR Image Set:'
+      ' ❌\n\n👉 Neeche buttons se QR ON/OFF karein ya Commands use'
+      ' karein:\n/ban <USER_ID>\n/unban <USER_ID>'
   )
 
   markup = types.InlineKeyboardMarkup(row_width=2)
@@ -424,9 +409,7 @@ def handle_admin_panel(call):
   )
 
   bot.answer_callback_query(call.id)
-  bot.send_message(
-      call.message.chat.id, admin_msg, reply_markup=markup, parse_mode='Markdown'
-  )
+  bot.send_message(call.message.chat.id, admin_msg, reply_markup=markup)
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'admin_stats')
@@ -439,11 +422,7 @@ def admin_stats(call):
   users = cursor.fetchone()[0]
   conn.close()
   bot.answer_callback_query(call.id)
-  bot.send_message(
-      call.message.chat.id,
-      f'📊 **Bot Statistics**\n\nTotal Users: {users}',
-      parse_mode='Markdown',
-  )
+  bot.send_message(call.message.chat.id, f'📊 Bot Statistics\n\nTotal Users: {users}')
 
 
 @bot.callback_query_handler(
@@ -453,11 +432,7 @@ def admin_actions(call):
   if call.from_user.id != ADMIN_TELEGRAM_ID:
     return
   bot.answer_callback_query(call.id, 'Action executed successfully.')
-  bot.send_message(
-      call.message.chat.id,
-      f'⚙️ Action processed for: {call.data}',
-      parse_mode='Markdown',
-  )
+  bot.send_message(call.message.chat.id, f'⚙️ Action processed for: {call.data}')
 
 
 # --- ADMIN BAN / UNBAN COMMANDS ---
@@ -476,9 +451,7 @@ def ban_user(message):
     conn.close()
     bot.send_message(message.chat.id, f'User {target_id} has been banned.')
   except Exception:
-    bot.send_message(
-        message.chat.id, 'Usage: /ban <USER_ID>', parse_mode='Markdown'
-    )
+    bot.send_message(message.chat.id, 'Usage: /ban <USER_ID>')
 
 
 @bot.message_handler(commands=['unban'])
@@ -496,16 +469,14 @@ def unban_user(message):
     conn.close()
     bot.send_message(message.chat.id, f'User {target_id} has been unbanned.')
   except Exception:
-    bot.send_message(
-        message.chat.id, 'Usage: /unban <USER_ID>', parse_mode='Markdown'
-    )
+    bot.send_message(message.chat.id, 'Usage: /unban <USER_ID>')
 
 
 if __name__ == '__main__':
-  # Run Flask server in a separate thread to satisfy Render's port binding check
+  # Run Flask server in a separate thread for Render port binding
   flask_thread = threading.Thread(target=run_flask)
   flask_thread.daemon = True
   flask_thread.start()
 
   print('Bot and Flask web server are running successfully...')
-  bot.infinity_polling()
+  bot.infinity_polling(skip_pending=True)
