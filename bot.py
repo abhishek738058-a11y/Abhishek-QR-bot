@@ -1,6 +1,6 @@
 """
 =============================================================================
-OFFICIAL ABHISHEKQRBOT - ADVANCED EARNING & QR TASK BOT (FINAL CUSTOM EDITION)
+OFFICIAL ABHISHEKQRBOT - ADVANCED EARNING & QR TASK BOT (FINAL FIXED EDITION)
 Developer / Owner: Abhishek (@abhishek723803)
 Description: Telegram bot with Force Join verification, dynamic QR availability,
              direct referral bonus (₹1.00), dynamic slabs, and admin approvals.
@@ -162,13 +162,12 @@ def send_welcome(message):
         force_join_markup.add(
             types.InlineKeyboardButton("📢 Join Update Channel", url=BOT_SETTINGS["channel_link"]),
             types.InlineKeyboardButton("✅ Joined & Start Bot", callback_data="verify_force_join")
-        >
         )
         join_msg = (
             f"⚠️ **Channel Join Required!**\n\n"
             f"Welcome to **{BOT_NAME}** 🤖\n"
             f"Bot ko use karne ke liye sabse pehle hamara official update channel join karna zaroori hai.\n\n"
-            f"👇 Neeche diye गए button par click karke channel join karein aur phir 'Joined & Start Bot' par click karein:"
+            f"👇 Neeche diye gaye button par click karke channel join karein aur phir 'Joined & Start Bot' par click karein:"
         )
         safe_send_message(message.chat.id, join_msg, reply_markup=force_join_markup)
         return
@@ -209,8 +208,8 @@ def show_main_menu(chat_id, first_name, sound_enabled):
     
     welcome_text = (
         f"👋 Welcome, **{first_name}** to **{BOT_NAME}**!\n\n"
-        f"🤖 Aapka swagat hai hamare official Automated Earning & QR Task Bot mein[cite: 8].\n"
-        f"Yahan aap fast scanning tasks complete karke, dynamic slabs ke through rewards earn kar sakte hain aur dosto ko invite karke direct bonus pa sakte hain[cite: 8].\n\n"
+        f"🤖 Aapka swagat hai hamare official Automated Earning & QR Task Bot mein.\n"
+        f"Yahan aap fast scanning tasks complete karke, dynamic slabs ke through rewards earn kar sakte hain aur dosto ko invite karke direct bonus pa sakte hain.\n\n"
         f"👇 Neeche menu se koi bhi option chunein:"
     )
     safe_send_message(chat_id, welcome_text, reply_markup=markup, sound_enabled=sound_enabled)
@@ -336,8 +335,8 @@ def handle_payment_screenshot(message):
     
     submission_text = (
         f"📥 **Screenshot Successfully Submitted!**\n\n"
-        f"Aapka payment screenshot admin ke paas verification ke liye bhej diya gaya hai[cite: 8].\n"
-        f"⏳ Jaise hi admin approval denge, tabhi aapke wallet mein paise add honगे[cite: 8]."
+        f"Aapka payment screenshot admin ke paas verification ke liye bhej diya gaya hai.\n"
+        f"⏳ Jaise hi admin approval denge, tabhi aapke wallet mein paise add honge."
     )
     safe_send_message(message.chat.id, submission_text, sound_enabled=user_data["notifications"])
 
@@ -408,7 +407,7 @@ def handle_admin_verification(call):
 
 
 # ============================================================================
-# SECTION 8: REMAINING 9 MENU BUTTON HANDLERS
+# SECTION 8: REMAINING MENU BUTTON HANDLERS
 # ============================================================================
 
 @bot.message_handler(func=lambda message: message.text == "💰 My Balance")
@@ -418,14 +417,14 @@ def my_balance(message):
     next_rate = get_current_rate(user_data["completed_tasks"])
     
     balance_content = (
-        f"💰 **YOUR WALLET & EARNING TIERS** 💰[cite: 8]\n\n"
-        f"🏦 Available Balance: ₹{user_data['balance']}[cite: 8]\n"
-        f"⭐ Active Payout Rate: ₹{next_rate} / QR[cite: 8]\n"
-        f"🏧 Minimum Withdrawal: ₹{BOT_SETTINGS['min_withdrawal']}[cite: 8]\n\n"
-        f"📊 **Dynamic Slab Reward Structure:**[cite: 8]\n"
-        f"• 1 to 10 QRs: ₹15 per QR[cite: 8]\n"
-        f"• 11 to 20 QRs: ₹20 per QR[cite: 8]\n"
-        f"• 21 to 30+ QRs: ₹25 per QR[cite: 8]"
+        f"💰 **YOUR WALLET & EARNING TIERS** 💰\n\n"
+        f"🏦 Available Balance: ₹{user_data['balance']}\n"
+        f"⭐ Active Payout Rate: ₹{next_rate} / QR\n"
+        f"🏧 Minimum Withdrawal: ₹{BOT_SETTINGS['min_withdrawal']}\n\n"
+        f"📊 **Dynamic Slab Reward Structure:**\n"
+        f"• 1 to 10 QRs: ₹15 per QR\n"
+        f"• 11 to 20 QRs: ₹20 per QR\n"
+        f"• 21 to 30+ QRs: ₹25 per QR"
     )
     safe_send_message(message.chat.id, balance_content, sound_enabled=user_data["notifications"])
 
@@ -437,15 +436,15 @@ def my_account(message):
     user_data = get_user_data(user_id)
     
     account_info = (
-        f"👤 **YOUR ACCOUNT PROFILE**[cite: 8]\n\n"
+        f"👤 **YOUR ACCOUNT PROFILE**\n\n"
         f"📌 **Name:** {message.from_user.first_name}\n"
-        f"🔖 **Username:** @{message.from_user.username if message.from_user.username else 'None'}[cite: 8]\n"
-        f"🆔 **Telegram ID:** `{user_id}`[cite: 8]\n\n"
-        f"🏦 Wallet Balance: ₹{user_data['balance']}[cite: 8]\n"
-        f"📋 Completed QRs: {user_data['completed_tasks']}[cite: 8]\n"
-        f"👥 Total Referrals: {user_data['referrals']} Users[cite: 8]\n"
-        f"🔔 Sound Notification: {'ON 🔊' if user_data['notifications'] else 'OFF 🔕'}[cite: 8]\n"
-        f"📅 Joined On: {user_data['joined_date']}[cite: 8]"
+        f"🔖 **Username:** @{message.from_user.username if message.from_user.username else 'None'}\n"
+        f"🆔 **Telegram ID:** `{user_id}`\n\n"
+        f"🏦 Wallet Balance: ₹{user_data['balance']}\n"
+        f"📋 Completed QRs: {user_data['completed_tasks']}\n"
+        f"👥 Total Referrals: {user_data['referrals']} Users\n"
+        f"🔔 Sound Notification: {'ON 🔊' if user_data['notifications'] else 'OFF 🔕'}\n"
+        f"📅 Joined On: {user_data['joined_date']}"
     )
     safe_send_message(message.chat.id, account_info, sound_enabled=user_data["notifications"])
 
@@ -457,7 +456,7 @@ def withdraw_money(message):
     if user_data["balance"] < BOT_SETTINGS["min_withdrawal"]:
         safe_send_message(
             message.chat.id, 
-            f"❌ **Insufficient Balance.**\n\nAapka current balance ₹{user_data['balance']} hai[cite: 8].\nMinimum withdrawal limit ₹{BOT_SETTINGS['min_withdrawal']} honi chahiye[cite: 8].",
+            f"❌ **Insufficient Balance.**\n\nAapka current balance ₹{user_data['balance']} hai.\nMinimum withdrawal limit ₹{BOT_SETTINGS['min_withdrawal']} honi chahiye.",
             sound_enabled=user_data["notifications"]
         )
     else:
@@ -509,9 +508,9 @@ def withdrawal_history(message):
     user_id = message.from_user.id
     history = WITHDRAWALS_HISTORY.get(user_id, [])
     
-    history_content = f"📜 **WITHDRAWAL HISTORY**\n\n🆔 Telegram ID: `{user_id}`[cite: 8]\n\n"
+    history_content = f"📜 **WITHDRAWAL HISTORY**\n\n🆔 Telegram ID: `{user_id}`\n\n"
     if not history:
-        history_content += "Koi bhi withdrawal transaction record nahi mila[cite: 8]."
+        history_content += "Koi bhi withdrawal transaction record nahi mila."
     else:
         history_content += "\n".join(f"• {item}" for item in history)
         
@@ -540,7 +539,7 @@ def task_history(message):
     tasks = TASK_HISTORY.get(user_id, [])
     
     if not tasks:
-        task_text = "📋 **TASK HISTORY**\n\nAbhi tak koi bhi completed task nahi hai[cite: 8]."
+        task_text = "📋 **TASK HISTORY**\n\nAbhi tak koi bhi completed task nahi hai."
     else:
         task_text = "📋 **COMPLETED TASK HISTORY**\n\n" + "\n".join(f"• {t}" for t in tasks[-15:])
         
@@ -564,7 +563,7 @@ def support(message):
     support_text = (
         f"🛠 **CUSTOMER SUPPORT DESK**\n\n"
         f"👑 Owner Username: {ADMIN_USERNAME}\n"
-        f"⏰ Timing: 10:00 AM - 10:00 PM[cite: 8]\n\n"
+        f"⏰ Timing: 10:00 AM - 10:00 PM\n\n"
         f"Payment ya withdrawal mein koi bhi problem ho toh admin se contact karein."
     )
     safe_send_message(message.chat.id, support_text, sound_enabled=get_user_data(message.from_user.id)["notifications"])
@@ -578,12 +577,12 @@ def support(message):
 def admin_panel(message):
     if message.from_user.id == ADMIN_ID or (message.from_user.username and message.from_user.username.lower() == ADMIN_USERNAME.replace("@", "").lower()):
         admin_text = (
-            f"👑 **Admin Control & User Management Panel**[cite: 8]\n\n"
-            f"Welcome Abhishek! Total Registered Users: {len(USERS)}[cite: 8]\n"
-            f"QR Status: {'Active (Available)' if QR_STATE['is_available'] else 'Inactive (Unavailable)'}[cite: 8]\n\n"
-            f"👇 Kisi bhi user ko Ban ya Unban karne ke liye commands use karein[cite: 8]:\n"
-            f"• `/ban <USER_ID>`[cite: 8]\n"
-            f"• `/unban <USER_ID>`[cite: 8]"
+            f"👑 **Admin Control & User Management Panel**\n\n"
+            f"Welcome Abhishek! Total Registered Users: {len(USERS)}\n"
+            f"QR Status: {'Active (Available)' if QR_STATE['is_available'] else 'Inactive (Unavailable)'}\n\n"
+            f"👇 Kisi bhi user ko Ban ya Unban karne ke liye commands use karein:\n"
+            f"• `/ban <USER_ID>`\n"
+            f"• `/unban <USER_ID>`"
         )
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
