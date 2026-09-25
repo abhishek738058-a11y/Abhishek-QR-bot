@@ -1,9 +1,9 @@
 """
 =============================================================================
-OFFICIAL ADVANCED TELEGRAM EARNING & QR TASK BOT (FINAL CLEAN EDITION)
+OFFICIAL ABHISHEKQRBOT - ADVANCED EARNING & QR TASK BOT (FINAL CUSTOM EDITION)
 Developer / Owner: Abhishek (@abhishek723803)
-Description: Telegram bot with direct referral bonus (₹1.00), dynamic slab rewards, 
-             strict admin screenshot verifications, and zero lifetime commissions.
+Description: Telegram bot with Force Join verification, dynamic QR availability,
+             direct referral bonus (₹1.00), dynamic slabs, and admin approvals.
 =============================================================================
 """
 
@@ -24,10 +24,11 @@ bot = telebot.TeleBot(TOKEN)
 # Administrative Security Constants
 ADMIN_USERNAME = "@abhishek723803"
 ADMIN_ID = 841187478
+BOT_NAME = "ABHISHEKQRBOT"
 
 # Global Bot State Dictionaries
 QR_STATE = {
-    "is_available": True,   # Controls whether QR tasks are open for users
+    "is_available": False,  # Default False: QR tabhi dikhega jab aap Admin Panel se ON karoge
     "is_claimed": False     # Tracks if current active QR is claimed
 }
 
@@ -42,6 +43,7 @@ WITHDRAWALS_HISTORY = {}
 TASK_HISTORY = {}
 PENDING_WITHDRAWALS = {}
 PENDING_APPROVALS = {}
+VERIFIED_USERS = set()  # Tracks users who completed Force Join
 
 
 # ============================================================================
@@ -52,7 +54,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "Telegram Earning & QR Task Bot is running live and operational!"
+    return "ABHISHEKQRBOT is running live and operational!"
 
 def run_flask():
     app.run(host='0.0.0.0', port=8080)
@@ -122,7 +124,7 @@ def safe_send_message(chat_id, text, reply_markup=None, parse_mode="Markdown", s
 
 
 # ============================================================================
-# SECTION 4: /START COMMAND & DIRECT REFERRAL SYSTEM
+# SECTION 4: /START COMMAND & FORCE JOIN VERIFICATION SYSTEM
 # ============================================================================
 
 @bot.message_handler(commands=['start'])
@@ -135,7 +137,7 @@ def send_welcome(message):
 
     user_data = get_user_data(user_id)
     
-    # Process Direct Referral & ₹1.00 Joining Bonus (Lifetime commission removed)
+    # Process Direct Referral & ₹1.00 Joining Bonus
     args = message.text.split()
     if len(args) > 1 and user_data["referred_by"] is None:
         try:
@@ -154,7 +156,43 @@ def send_welcome(message):
         except Exception as ref_err:
             print(f"Referral error: {ref_err}")
 
-    # 10 Main Menu Buttons Layout (Reply Keyboard)
+    # Check Force Join Status
+    if user_id not in VERIFIED_USERS:
+        force_join_markup = types.InlineKeyboardMarkup(row_width=1)
+        force_join_markup.add(
+            types.InlineKeyboardButton("📢 Join Update Channel", url=BOT_SETTINGS["channel_link"]),
+            types.InlineKeyboardButton("✅ Joined & Start Bot", callback_data="verify_force_join")
+        >
+        )
+        join_msg = (
+            f"⚠️ **Channel Join Required!**\n\n"
+            f"Welcome to **{BOT_NAME}** 🤖\n"
+            f"Bot ko use karne ke liye sabse pehle hamara official update channel join karna zaroori hai.\n\n"
+            f"👇 Neeche diye गए button par click karke channel join karein aur phir 'Joined & Start Bot' par click karein:"
+        )
+        safe_send_message(message.chat.id, join_msg, reply_markup=force_join_markup)
+        return
+
+    # If already verified, show main menu
+    show_main_menu(message.chat.id, message.from_user.first_name, user_data["notifications"])
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "verify_force_join")
+def verify_force_join_callback(call):
+    user_id = call.from_user.id
+    VERIFIED_USERS.add(user_id)
+    bot.answer_callback_query(call.id, "Channel verification successful! Welcome.")
+    
+    try:
+        bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+    except Exception:
+        pass
+        
+    user_data = get_user_data(user_id)
+    show_main_menu(call.message.chat.id, call.from_user.first_name, user_data["notifications"])
+
+
+def show_main_menu(chat_id, first_name, sound_enabled):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
         types.KeyboardButton("🎯 GET QR"),
@@ -170,16 +208,16 @@ def send_welcome(message):
     )
     
     welcome_text = (
-        f"👋 Welcome, **{message.from_user.first_name}**!\n\n"
-        f"🤖 Welcome to our official Automated Earning & QR Task Bot.\n"
-        f"Complete fast scanning tasks, earn rewards through dynamic earning slabs, invite friends for instant direct bonuses, and withdraw real money securely!\n\n"
-        f"👇 Choose any option from the menu below:"
+        f"👋 Welcome, **{first_name}** to **{BOT_NAME}**!\n\n"
+        f"🤖 Aapka swagat hai hamare official Automated Earning & QR Task Bot mein[cite: 8].\n"
+        f"Yahan aap fast scanning tasks complete karke, dynamic slabs ke through rewards earn kar sakte hain aur dosto ko invite karke direct bonus pa sakte hain[cite: 8].\n\n"
+        f"👇 Neeche menu se koi bhi option chunein:"
     )
-    safe_send_message(message.chat.id, welcome_text, reply_markup=markup, sound_enabled=user_data["notifications"])
+    safe_send_message(chat_id, welcome_text, reply_markup=markup, sound_enabled=sound_enabled)
 
 
 # ============================================================================
-# SECTION 5: "GET QR" SECTION & CONDITIONAL AVAILABILITY CHECK
+# SECTION 5: "GET QR" SECTION (STRICT AVAILABILITY CONTROL)
 # ============================================================================
 
 @bot.message_handler(func=lambda message: message.text == "🎯 GET QR")
@@ -191,19 +229,18 @@ def handle_get_qr(message):
 
     user_data = get_user_data(user_id)
     
+    # Strict Check: If Admin has NOT added/enabled QR, show unavailable message
     if not QR_STATE["is_available"]:
         no_qr_text = (
-            "❌ **QR Available Nahi Hai!**\n\n"
-            "Abhi is time par koi bhi active QR task available nahi hai. Kripya thodi der baad dobara try karein ya notification on rakhein taaki naya QR aate hi aap turant grab kar sakein!\n\n"
-            f"🔔 Hamara official update channel join karein:\n🔗 {BOT_SETTINGS['channel_link']}"
+            "❌ **QR abhi available nahi hai!**\n\n"
+            "Keep trying for next time! 🚀 Naya QR task aate hi aapko update mil jayega."
         )
         safe_send_message(message.chat.id, no_qr_text, sound_enabled=user_data["notifications"])
         
     elif QR_STATE["is_claimed"]:
         claimed_text = (
             "⚠️ **Task Already Claimed**\n\n"
-            "Oops! Yeh QR task pehle hi kisi aur user dwara claim kiya ja chuka hai. Kripya next fresh QR drop ke liye wait karein!\n\n"
-            f"🔔 Hamara official update channel join karein:\n🔗 {BOT_SETTINGS['channel_link']}"
+            "Oops! Yeh QR task pehle hi kisi aur user dwara claim kiya ja chuka hai. Kripya next fresh QR drop ke liye wait karein!"
         )
         safe_send_message(message.chat.id, claimed_text, sound_enabled=user_data["notifications"])
         
@@ -212,15 +249,11 @@ def handle_get_qr(message):
         qr_text = (
             f"🎯 **QR TASK & CLAIM ZONE** 🎯\n\n"
             f"🎁 **Reward:** ₹{current_reward}\n\n"
-            f"⚠️ **IMPORTANT NOTICE:**\n"
-            f"Live QR tasks limited time ke liye aate hain.\n\n"
-            f"📌 **Rules:**\n"
-            f"1️⃣ GET QR par tap karein.\n"
-            f"2️⃣ QR active hone par payment claim hogi.\n\n"
-            f"📢 **LIVE QR ALERTS:**\n"
-            f"Naye QR tasks ke alerts pane ke liye official channel join karein:\n"
-            f"🔗 **Official Channel:** {BOT_SETTINGS['channel_link']}\n\n"
-            f"Tap the button below to claim this QR:"
+            f"📌 **Instructions:**\n"
+            f"1️⃣ Neeche 'Make Payment' button par click karein.\n"
+            f"2️⃣ QR scan karke payment complete karein.\n"
+            f"3️⃣ Payment ka screenshot (photo) direct is chat mein bhej dein.\n\n"
+            f"Tap the button below to proceed:"
         )
         
         markup = types.InlineKeyboardMarkup()
@@ -250,9 +283,8 @@ def ask_payment_proof(call):
     proof_text = (
         f"✅ **QR Successfully Claimed!**\n\n"
         f"🎁 **Reward Payout:** ₹{current_reward}\n"
-        f"⏳ Aapke paas 4 minute hain transaction complete karne ke liye.\n\n"
-        f"💳 **Instructions:**\n"
-        f"QR scan karke payment karein aur apne payment ka screenshot (photo) direct is chat mein upload karein."
+        f"⏳ Aapke paas time hai payment complete karne ke liye.\n\n"
+        f"💳 **Action:** QR scan karke payment karein aur screenshot direct is chat mein upload karein."
     )
     
     try:
@@ -287,7 +319,7 @@ def handle_payment_screenshot(message):
         f"🆔 User ID: `{user_id}`\n"
         f"📋 Task Number: #{current_task_num}\n"
         f"🎁 Reward Amount: ₹{reward}\n\n"
-        f"Kripya payment receipt check karke neeche se action lein:"
+        f"Kripya receipt check karke approve ya reject karein:"
     )
     
     markup = types.InlineKeyboardMarkup(row_width=2)
@@ -304,14 +336,14 @@ def handle_payment_screenshot(message):
     
     submission_text = (
         f"📥 **Screenshot Successfully Submitted!**\n\n"
-        f"Aapka payment screenshot admin ke paas verification ke liye bhej diya gaya hai.\n"
-        f"⏳ Jaise hi admin ise approve karenge, aapke wallet mein paise turant add kar diye jayenge."
+        f"Aapka payment screenshot admin ke paas verification ke liye bhej diya gaya hai[cite: 8].\n"
+        f"⏳ Jaise hi admin approval denge, tabhi aapke wallet mein paise add honगे[cite: 8]."
     )
     safe_send_message(message.chat.id, submission_text, sound_enabled=user_data["notifications"])
 
 
 # ============================================================================
-# SECTION 7: ADMIN APPROVAL/REJECTION (NO LIFETIME COMMISSION)
+# SECTION 7: ADMIN APPROVAL / REJECTION
 # ============================================================================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith(("approve_", "reject_")))
@@ -329,7 +361,7 @@ def handle_admin_verification(call):
         reward = float(data_parts[2])
         user_data["completed_tasks"] += 1
         current_task_num = user_data["completed_tasks"]
-        user_data["balance"] += reward  # Credit base reward only upon admin approval
+        user_data["balance"] += reward  # Wallet balance credited only upon admin approval
         
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         if user_id not in TASK_HISTORY:
@@ -351,7 +383,6 @@ def handle_admin_verification(call):
         success_user_msg = (
             f"✅ **Payment Approved by Admin!**\n\n"
             f"🎁 **Reward Added (Task #{current_task_num}):** ₹{reward}\n"
-            f"📋 **Total Completed QRs:** {current_task_num}\n"
             f"💰 **Updated Wallet Balance:** ₹{user_data['balance']}\n\n"
             f"🎉 Badhai ho! Aise hi aur tasks complete karte rahein."
         )
@@ -371,7 +402,7 @@ def handle_admin_verification(call):
             
         reject_user_msg = (
             f"❌ **Payment Proof Rejected**\n\n"
-            f"Aapka submitted payment screenshot admin dwara reject kar diya gaya hai kyunki yeh invalid ya mismatch tha."
+            f"Aapka submitted payment screenshot admin dwara reject kar diya gaya hai."
         )
         safe_send_message(user_id, reject_user_msg, sound_enabled=user_data["notifications"])
 
@@ -387,14 +418,14 @@ def my_balance(message):
     next_rate = get_current_rate(user_data["completed_tasks"])
     
     balance_content = (
-        f"💰 **YOUR WALLET & EARNING TIERS** 💰\n\n"
-        f"🏦 Available Balance: ₹{user_data['balance']}\n"
-        f"⭐ Active Payout Rate: ₹{next_rate} / QR\n"
-        f"🏧 Minimum Withdrawal: ₹{BOT_SETTINGS['min_withdrawal']}\n\n"
-        f"📊 **Dynamic Slab Reward Structure:**\n"
-        f"• 1 to 10 QRs: ₹15 per QR\n"
-        f"• 11 to 20 QRs: ₹20 per QR\n"
-        f"• 21 to 30+ QRs: ₹25 per QR"
+        f"💰 **YOUR WALLET & EARNING TIERS** 💰[cite: 8]\n\n"
+        f"🏦 Available Balance: ₹{user_data['balance']}[cite: 8]\n"
+        f"⭐ Active Payout Rate: ₹{next_rate} / QR[cite: 8]\n"
+        f"🏧 Minimum Withdrawal: ₹{BOT_SETTINGS['min_withdrawal']}[cite: 8]\n\n"
+        f"📊 **Dynamic Slab Reward Structure:**[cite: 8]\n"
+        f"• 1 to 10 QRs: ₹15 per QR[cite: 8]\n"
+        f"• 11 to 20 QRs: ₹20 per QR[cite: 8]\n"
+        f"• 21 to 30+ QRs: ₹25 per QR[cite: 8]"
     )
     safe_send_message(message.chat.id, balance_content, sound_enabled=user_data["notifications"])
 
@@ -406,15 +437,15 @@ def my_account(message):
     user_data = get_user_data(user_id)
     
     account_info = (
-        f"👤 **YOUR ACCOUNT PROFILE**\n\n"
+        f"👤 **YOUR ACCOUNT PROFILE**[cite: 8]\n\n"
         f"📌 **Name:** {message.from_user.first_name}\n"
-        f"🔖 **Username:** @{message.from_user.username if message.from_user.username else 'None'}\n"
-        f"🆔 **Telegram ID:** `{user_id}`\n\n"
-        f"🏦 Wallet Balance: ₹{user_data['balance']}\n"
-        f"📋 Completed QRs: {user_data['completed_tasks']}\n"
-        f"👥 Total Referrals: {user_data['referrals']} Users\n"
-        f"🔔 Sound Notification: {'ON 🔊' if user_data['notifications'] else 'OFF 🔕'}\n"
-        f"📅 Joined On: {user_data['joined_date']}"
+        f"🔖 **Username:** @{message.from_user.username if message.from_user.username else 'None'}[cite: 8]\n"
+        f"🆔 **Telegram ID:** `{user_id}`[cite: 8]\n\n"
+        f"🏦 Wallet Balance: ₹{user_data['balance']}[cite: 8]\n"
+        f"📋 Completed QRs: {user_data['completed_tasks']}[cite: 8]\n"
+        f"👥 Total Referrals: {user_data['referrals']} Users[cite: 8]\n"
+        f"🔔 Sound Notification: {'ON 🔊' if user_data['notifications'] else 'OFF 🔕'}[cite: 8]\n"
+        f"📅 Joined On: {user_data['joined_date']}[cite: 8]"
     )
     safe_send_message(message.chat.id, account_info, sound_enabled=user_data["notifications"])
 
@@ -426,7 +457,7 @@ def withdraw_money(message):
     if user_data["balance"] < BOT_SETTINGS["min_withdrawal"]:
         safe_send_message(
             message.chat.id, 
-            f"❌ **Insufficient Balance.**\n\nAapka current balance ₹{user_data['balance']} hai.\nMinimum withdrawal limit ₹{BOT_SETTINGS['min_withdrawal']} honi chahiye.",
+            f"❌ **Insufficient Balance.**\n\nAapka current balance ₹{user_data['balance']} hai[cite: 8].\nMinimum withdrawal limit ₹{BOT_SETTINGS['min_withdrawal']} honi chahiye[cite: 8].",
             sound_enabled=user_data["notifications"]
         )
     else:
@@ -465,7 +496,7 @@ def process_withdrawal_callback(call):
         bot.edit_message_text(
             chat_id=call.message.chat.id,
             message_id=call.message.message_id,
-            text=f"✅ **Withdrawal Request Submitted Successfully!**\n\nAmount: ₹{amount}\nStatus: Processing\nAapka payout jald hi aapke account mein bhej diya jayega.",
+            text=f"✅ **Withdrawal Request Submitted Successfully!**\n\nAmount: ₹{amount}\nStatus: Processing",
             parse_mode="Markdown"
         )
     except Exception:
@@ -478,9 +509,9 @@ def withdrawal_history(message):
     user_id = message.from_user.id
     history = WITHDRAWALS_HISTORY.get(user_id, [])
     
-    history_content = f"📜 **WITHDRAWAL HISTORY**\n\n🆔 Telegram ID: `{user_id}`\n\n"
+    history_content = f"📜 **WITHDRAWAL HISTORY**\n\n🆔 Telegram ID: `{user_id}`[cite: 8]\n\n"
     if not history:
-        history_content += "Koi bhi withdrawal transaction record nahi mila."
+        history_content += "Koi bhi withdrawal transaction record nahi mila[cite: 8]."
     else:
         history_content += "\n".join(f"• {item}" for item in history)
         
@@ -509,7 +540,7 @@ def task_history(message):
     tasks = TASK_HISTORY.get(user_id, [])
     
     if not tasks:
-        task_text = "📋 **TASK HISTORY**\n\nAbhi tak koi bhi completed task nahi hai."
+        task_text = "📋 **TASK HISTORY**\n\nAbhi tak koi bhi completed task nahi hai[cite: 8]."
     else:
         task_text = "📋 **COMPLETED TASK HISTORY**\n\n" + "\n".join(f"• {t}" for t in tasks[-15:])
         
@@ -533,7 +564,7 @@ def support(message):
     support_text = (
         f"🛠 **CUSTOMER SUPPORT DESK**\n\n"
         f"👑 Owner Username: {ADMIN_USERNAME}\n"
-        f"⏰ Timing: 10:00 AM - 10:00 PM\n\n"
+        f"⏰ Timing: 10:00 AM - 10:00 PM[cite: 8]\n\n"
         f"Payment ya withdrawal mein koi bhi problem ho toh admin se contact karein."
     )
     safe_send_message(message.chat.id, support_text, sound_enabled=get_user_data(message.from_user.id)["notifications"])
@@ -547,12 +578,12 @@ def support(message):
 def admin_panel(message):
     if message.from_user.id == ADMIN_ID or (message.from_user.username and message.from_user.username.lower() == ADMIN_USERNAME.replace("@", "").lower()):
         admin_text = (
-            f"👑 **Admin Control & User Management Panel**\n\n"
-            f"Welcome Abhishek! Total Registered Users: {len(USERS)}\n"
-            f"QR Status: {'Active (Available)' if QR_STATE['is_available'] else 'Inactive (Unavailable)'}\n\n"
-            f"👇 Kisi bhi user ko Ban ya Unban karne ke liye neeche diye gaye commands use karein:\n"
-            f"• `/ban <USER_ID>`\n"
-            f"• `/unban <USER_ID>`"
+            f"👑 **Admin Control & User Management Panel**[cite: 8]\n\n"
+            f"Welcome Abhishek! Total Registered Users: {len(USERS)}[cite: 8]\n"
+            f"QR Status: {'Active (Available)' if QR_STATE['is_available'] else 'Inactive (Unavailable)'}[cite: 8]\n\n"
+            f"👇 Kisi bhi user ko Ban ya Unban karne ke liye commands use karein[cite: 8]:\n"
+            f"• `/ban <USER_ID>`[cite: 8]\n"
+            f"• `/unban <USER_ID>`[cite: 8]"
         )
         markup = types.InlineKeyboardMarkup(row_width=2)
         markup.add(
@@ -628,7 +659,7 @@ def admin_callbacks(call):
     elif call.data == "admin_qr_on":
         QR_STATE["is_available"] = True
         QR_STATE["is_claimed"] = False
-        bot.answer_callback_query(call.id, "QR tasks enabled!")
+        bot.answer_callback_query(call.id, "QR tasks enabled! Users can now claim.")
         try:
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, 
                                   text="👑 **Admin Panel**\n\nQR Status: **Enabled (Available)**", parse_mode="Markdown")
@@ -637,7 +668,7 @@ def admin_callbacks(call):
                               
     elif call.data == "admin_qr_off":
         QR_STATE["is_available"] = False
-        bot.answer_callback_query(call.id, "QR tasks disabled!")
+        bot.answer_callback_query(call.id, "QR tasks disabled! Users will see unavailable message.")
         try:
             bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id, 
                                   text="👑 **Admin Panel**\n\nQR Status: **Disabled (Unavailable)**", parse_mode="Markdown")
@@ -660,7 +691,7 @@ if __name__ == "__main__":
     except Exception as webhook_err:
         print(f"Webhook warning: {webhook_err}")
         
-    print("Telegram Bot is running smoothly and ready for production...")
+    print("ABHISHEKQRBOT is running smoothly and ready for production...")
     
     while True:
         try:
