@@ -1,15 +1,32 @@
+import os
 import sqlite3
+import threading
+from flask import Flask
 import telebot
 from telebot import types
 
-# Bot Token aur Channel Settings
+# Aapka Bot Token aur Channel Settings
 TOKEN = '8513419896:AAEoqPXVd0aRSHSHpMIdo3VLELoaEFO5Wj4'
 CHANNEL_LINK = 'https://t.me/+757WqqqLLoo4Yjhl'
-MIN_WITHDRAWAL = 50.0
+MIN_WITHDRAWAL = 50.0  # Minimum withdrawal limit set to 50
 CURRENT_PAYOUT = 15.0
-ADMIN_TELEGRAM_ID = 8411871478  # Example Admin ID
+ADMIN_TELEGRAM_ID = 8411871478  # Admin Telegram ID
 
 bot = telebot.TeleBot(TOKEN)
+
+# --- FLASK SERVER FOR RENDER PORT BINDING ---
+app = Flask('')
+
+
+@app.route('/')
+def home():
+  return 'Bot is active and running successfully!'
+
+
+def run_flask():
+  port = int(os.environ.get('PORT', 8080))
+  app.run(host='0.0.0.0', port=port)
+
 
 # --- DATABASE SETUP ---
 def init_db():
@@ -38,19 +55,16 @@ def init_db():
             timestamp TEXT
         )
     ''')
-  cursor.execute('''
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-    ''')
   conn.commit()
   conn.close()
 
+
 init_db()
+
 
 def get_db_connection():
   return sqlite3.connect('bot_database.db', check_same_thread=False)
+
 
 # --- START COMMAND & FORCE JOIN ---
 @bot.message_handler(commands=['start'])
@@ -73,6 +87,7 @@ def send_welcome(message):
 
   if not row:
     import datetime
+
     joined_date = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     cursor.execute(
         'INSERT INTO users (user_id, username, full_name, joined_date) VALUES'
@@ -82,7 +97,7 @@ def send_welcome(message):
     conn.commit()
   conn.close()
 
-  # Force Join Markup with User's Channel Link only
+  # Force Join Markup with User's Channel Link only (A-Tools X removed completely)
   markup = types.InlineKeyboardMarkup()
   markup.add(
       types.InlineKeyboardButton(
@@ -99,12 +114,13 @@ def send_welcome(message):
       f'⚠️ **Channel Join Required!**\n\nWelcome to ABHISHEKQRBOT 🤖\nBot ko'
       f' use karne ke liye sabse pehle hamara official update channel join'
       f' karna zaroori hai.\n\n👉 Neeche diye gaye button par click karke'
-      f' channel join karein aur phir **'
-      f"Joined & Start Bot** par click karein:"
+      f' channel join karein aur phir **Joined & Start Bot** par click'
+      f' karein:'
   )
   bot.send_message(
       message.chat.id, welcome_text, reply_markup=markup, parse_mode='Markdown'
   )
+
 
 # --- VERIFY JOIN & MAIN MENU ---
 @bot.callback_query_handler(func=lambda call: call.data == 'check_join')
@@ -114,6 +130,7 @@ def verify_join(call):
 
   bot.answer_callback_query(call.id, 'Channel verification successful!')
 
+  # All 10 Reply/Menu Buttons Added Here
   markup = types.InlineKeyboardMarkup(row_width=2)
   btn_qr = types.InlineKeyboardButton('🎯 GET QR', callback_data='get_qr')
   btn_bal = types.InlineKeyboardButton(
@@ -169,10 +186,10 @@ def verify_join(call):
       parse_mode='Markdown',
   )
 
-# --- GET QR HANDLER ---
+
+# --- GET QR HANDLER (Professional Message & Cleaned Links) ---
 @bot.callback_query_handler(func=lambda call: call.data == 'get_qr')
 def handle_get_qr(call):
-  # Professional QR Not Available Message without any external old links
   error_msg = (
       '⚠️ **System Notice:**\n\n❌ **QR is not available right now.**\nWe are'
       ' currently updating our scanning servers for improved performance and'
@@ -182,6 +199,7 @@ def handle_get_qr(call):
   )
   bot.answer_callback_query(call.id)
   bot.send_message(call.message.chat.id, error_msg, parse_mode='Markdown')
+
 
 # --- MY BALANCE HANDLER ---
 @bot.callback_query_handler(func=lambda call: call.data == 'my_balance')
@@ -210,6 +228,7 @@ def handle_balance(call):
   )
   bot.answer_callback_query(call.id)
   bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
+
 
 # --- MY ACCOUNT HANDLER ---
 @bot.callback_query_handler(func=lambda call: call.data == 'my_account')
@@ -241,7 +260,8 @@ def handle_account(call):
     bot.answer_callback_query(call.id)
     bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
 
-# --- WITHDRAW MONEY HANDLER ---
+
+# --- WITHDRAW MONEY HANDLER (Min Limit 50) ---
 @bot.callback_query_handler(func=lambda call: call.data == 'withdraw_money')
 def handle_withdraw(call):
   user_id = call.from_user.id
@@ -270,6 +290,7 @@ def handle_withdraw(call):
         parse_mode='Markdown',
     )
 
+
 # --- WITHDRAWAL HISTORY HANDLER ---
 @bot.callback_query_handler(
     func=lambda call: call.data == 'withdrawal_history'
@@ -285,9 +306,7 @@ def handle_withdrawal_history(call):
   records = cursor.fetchall()
   conn.close()
 
-  msg = (
-      f'📜 **WITHDRAWAL HISTORY**\n\n🆔 Telegram ID: {user_id}\n\n'
-  )
+  msg = f'📜 **WITHDRAWAL HISTORY**\n\n🆔 Telegram ID: {user_id}\n\n'
   if not records:
     msg += 'Koi bhi withdrawal transaction record nahi mila.'
   else:
@@ -298,6 +317,7 @@ def handle_withdrawal_history(call):
 
   bot.answer_callback_query(call.id)
   bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
+
 
 # --- INVITE & EARN HANDLER ---
 @bot.callback_query_handler(func=lambda call: call.data == 'invite_earn')
@@ -316,6 +336,7 @@ def handle_invite(call):
   bot.answer_callback_query(call.id)
   bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
 
+
 # --- TASK HISTORY HANDLER ---
 @bot.callback_query_handler(func=lambda call: call.data == 'task_history')
 def handle_task_history(call):
@@ -325,6 +346,7 @@ def handle_task_history(call):
       '📋 **TASK HISTORY**\n\nAbhi tak koi bhi completed task nahi hai.',
       parse_mode='Markdown',
   )
+
 
 # --- TOGGLE NOTIFICATION HANDLER ---
 @bot.callback_query_handler(func=lambda call: call.data == 'toggle_notif')
@@ -346,12 +368,13 @@ def handle_toggle_notif(call):
     status_text = 'Disabled 🔴'
   conn.close()
 
-  bot.answer_callback_query(call.id, f'Notification status updated.')
+  bot.answer_callback_query(call.id, 'Notification status updated.')
   bot.send_message(
       call.message.chat.id,
       f'🔔 **Notification Settings**\n\nStatus: {status_text}',
       parse_mode='Markdown',
   )
+
 
 # --- SUPPORT HANDLER ---
 @bot.callback_query_handler(func=lambda call: call.data == 'support')
@@ -363,6 +386,7 @@ def handle_support(call):
       ' mein koi bhi problem ho toh admin se contact karein.'
   )
   bot.send_message(call.message.chat.id, msg, parse_mode='Markdown')
+
 
 # --- ADMIN PANEL HANDLER ---
 @bot.callback_query_handler(func=lambda call: call.data == 'admin_panel')
@@ -404,6 +428,7 @@ def handle_admin_panel(call):
       call.message.chat.id, admin_msg, reply_markup=markup, parse_mode='Markdown'
   )
 
+
 @bot.callback_query_handler(func=lambda call: call.data == 'admin_stats')
 def admin_stats(call):
   if call.from_user.id != ADMIN_TELEGRAM_ID:
@@ -420,6 +445,7 @@ def admin_stats(call):
       parse_mode='Markdown',
   )
 
+
 @bot.callback_query_handler(
     func=lambda call: call.data in ['qr_on', 'qr_off', 'admin_withdrawals']
 )
@@ -432,6 +458,7 @@ def admin_actions(call):
       f'⚙️ Action processed for: {call.data}',
       parse_mode='Markdown',
   )
+
 
 # --- ADMIN BAN / UNBAN COMMANDS ---
 @bot.message_handler(commands=['ban'])
@@ -453,6 +480,7 @@ def ban_user(message):
         message.chat.id, 'Usage: /ban <USER_ID>', parse_mode='Markdown'
     )
 
+
 @bot.message_handler(commands=['unban'])
 def unban_user(message):
   if message.from_user.id != ADMIN_TELEGRAM_ID:
@@ -472,6 +500,12 @@ def unban_user(message):
         message.chat.id, 'Usage: /unban <USER_ID>', parse_mode='Markdown'
     )
 
+
 if __name__ == '__main__':
-  print('Bot is running successfully...')
-  bot.polling(none_stop=True)
+  # Run Flask server in a separate thread to satisfy Render's port binding check
+  flask_thread = threading.Thread(target=run_flask)
+  flask_thread.daemon = True
+  flask_thread.start()
+
+  print('Bot and Flask web server are running successfully...')
+  bot.infinity_polling()
