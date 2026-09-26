@@ -165,16 +165,19 @@ def verify_join(call):
   bot.send_message(call.message.chat.id, main_menu_text, reply_markup=markup)
 
 
-# --- GET QR HANDLER (Message Bar Button) ---
+# --- GET QR HANDLER (Professional & Engaging Hinglish Message) ---
 @bot.message_handler(func=lambda message: message.text == '🎯 GET QR')
 def handle_get_qr(message):
-  error_msg = (
-      '⚠️ System Notice:\n\n❌ QR is not available right now.\nWe are currently'
-      ' updating our scanning servers for improved performance and security.'
-      ' Please try again after some time.\n\n(असुविधा के लिए खेद है, अभी QR'
-      ' उपलब्ध नहीं है। कृपया थोड़ी देर के बाद पुनः प्रयास करें।)'
+  engaging_msg = (
+      '🚀 **ABHISHEKQRBOT - SYSTEM STATUS UPDATE** 🚀\n\n⏳ **Server Upgrade in'
+      ' Progress!**\n\n❌ Filhal QR scanning service temporarily pause hai'
+      ' kyunki hum aapke liye servers ko aur bhi zyada fast, high-performance'
+      ' aur 100% secure bana rahe hain.\n\n💡 **Pro Tip:** Tab tak aap **Invite &'
+      ' Earn** section ka use karke apne dosto ko invite karein aur direct'
+      ' joining bonus earn karein! Naye QR tasks bohot jald live honge.\n\nStay'
+      ' tuned & keep earning! 🌟'
   )
-  bot.send_message(message.chat.id, error_msg)
+  bot.send_message(message.chat.id, engaging_msg, parse_mode='Markdown')
 
 
 # --- MY BALANCE HANDLER (Message Bar Button) ---
@@ -456,6 +459,4 @@ if __name__ == '__main__':
 
   print('Bot and Flask web server are running successfully...')
   bot.infinity_polling(skip_pending=True)
-  
-
   
