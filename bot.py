@@ -140,7 +140,6 @@ def verify_join(call):
   btn_task = types.KeyboardButton('📋 Task History')
   btn_notif = types.KeyboardButton('🔔 Toggle Notification')
   btn_sup = types.KeyboardButton('🎧 Support')
-  btn_admin = types.KeyboardButton('🛠️ Admin Panel')
 
   markup.add(
       btn_qr,
@@ -152,8 +151,12 @@ def verify_join(call):
       btn_task,
       btn_notif,
       btn_sup,
-      btn_admin,
   )
+
+  # Admin Panel button sirf Admin ki ID par hi show hoga, normal users ko nahi
+  if user_id == ADMIN_TELEGRAM_ID:
+    btn_admin = types.KeyboardButton('🛠️ Admin Panel')
+    markup.add(btn_admin)
 
   main_menu_text = (
       f'✨ Welcome, {user_name} to ABHISHEKQRBOT! ✨\n\n🚀 Aapka swagat hai'
