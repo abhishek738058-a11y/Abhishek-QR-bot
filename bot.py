@@ -6,9 +6,9 @@ import telebot
 from telebot import types
 
 # ---------------------------------------------------------
-# AAPKA TELEGRAM BOT TOKEN 
+# AAPKA NAYA TELEGRAM BOT TOKEN 
 # ---------------------------------------------------------
-TOKEN = '8513419896:AAGvyq8WS8AJbi77QW5gRN99QoiNU0JZR08'
+TOKEN = '8513419896:AAHJEvTRjpTvLffdMiScKa69_pkcT-nxsHc'
 
 CHANNEL_LINK = 'https://t.me/+757WqqqLLoo4Yjhl'
 MIN_WITHDRAWAL = 50.0  # Minimum withdrawal limit set to 50
